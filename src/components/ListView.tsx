@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from "@/types/deal";
-import { Search, Filter, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Filter, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Briefcase } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RowActionsDropdown, Edit, Trash2, CheckSquare } from "./RowActionsDropdown";
 import { format } from "date-fns";
@@ -22,6 +22,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useColumnPreferences } from "@/hooks/useColumnPreferences";
 import { DeleteConfirmDialog } from "./shared/DeleteConfirmDialog";
+import { ClearFiltersButton } from "./shared/ClearFiltersButton";
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 interface ListViewProps {
   deals: Deal[];
@@ -56,7 +59,7 @@ export const ListView = ({
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedDeals, setSelectedDeals] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Sync stage filter when initialStageFilter prop changes (from URL)
   useEffect(() => {
@@ -399,7 +402,7 @@ export const ListView = ({
   };
 
   const activeFiltersCount = getActiveFiltersCount();
-  const hasActiveFilters = activeFiltersCount > 0 || searchTerm;
+  const hasActiveFilters = activeFiltersCount > 0 || searchTerm !== "";
 
   // Get selected deal objects for export
   const selectedDealObjects = deals.filter(deal => selectedDeals.has(deal.id));
@@ -411,67 +414,67 @@ export const ListView = ({
 
   return (
     <div className="h-full flex flex-col bg-background space-y-3">
-      <div className="flex-shrink-0 px-4 py-2 bg-background border-b border-border">
-        <div className="flex flex-col lg:flex-row gap-2 items-start lg:items-center justify-between">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1 min-w-0">
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 pointer-events-none" />
-              <Input
-                placeholder="Search deals..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-                inputSize="control"
-              />
-            </div>
-            
-            <Select value={leadOwnerFilter} onValueChange={setLeadOwnerFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Lead Owners" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Lead Owners</SelectItem>
-                {availableOptions.leadOwners.map((owner) => (
-                  <SelectItem key={owner} value={owner}>
-                    {owner}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <DealsAdvancedFilter 
-              filters={filters} 
-              onFiltersChange={setFilters}
-              availableRegions={availableOptions.regions}
-              availableLeadOwners={availableOptions.leadOwners}
-              availablePriorities={availableOptions.priorities}
-              availableProbabilities={availableOptions.probabilities}
-              availableHandoffStatuses={availableOptions.handoffStatuses}
+      {/* Header and Actions */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4 pointer-events-none" />
+            <Input
+              placeholder="Search deals..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+              inputSize="control"
             />
-
-            {hasActiveFilters && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={clearAllFilters}
-                className="flex items-center gap-2 text-muted-foreground hover:text-foreground h-8 px-3 text-sm"
-              >
-                <X className="w-4 h-4" />
-                Clear All
-              </Button>
-            )}
-
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <DealActionsDropdown
-                deals={deals}
-                onImport={onImportDeals}
-                onRefresh={() => {}}
-                selectedDeals={selectedDealObjects}
-                onColumnCustomize={() => setColumnCustomizerOpen(true)}
-                showColumns={true}
-              />
-            </div>
           </div>
+          
+          <Select value={leadOwnerFilter} onValueChange={setLeadOwnerFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All Lead Owners" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Lead Owners</SelectItem>
+              {availableOptions.leadOwners.map((owner) => (
+                <SelectItem key={owner} value={owner}>
+                  {owner}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <DealsAdvancedFilter 
+            filters={filters} 
+            onFiltersChange={setFilters}
+            availableRegions={availableOptions.regions}
+            availableLeadOwners={availableOptions.leadOwners}
+            availablePriorities={availableOptions.priorities}
+            availableProbabilities={availableOptions.probabilities}
+            availableHandoffStatuses={availableOptions.handoffStatuses}
+          />
+
+          <ClearFiltersButton hasActiveFilters={hasActiveFilters} onClear={clearAllFilters} />
+
+          <DealActionsDropdown
+            deals={deals}
+            onImport={onImportDeals}
+            onRefresh={() => {}}
+            selectedDeals={selectedDealObjects}
+            onColumnCustomize={() => setColumnCustomizerOpen(true)}
+            showColumns={true}
+          />
+        </div>
+        
+        {/* Page size selector */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Show:</span>
+          <Select value={itemsPerPage.toString()} onValueChange={val => setItemsPerPage(Number(val))}>
+            <SelectTrigger className="w-[70px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map(size => <SelectItem key={size} value={size.toString()}>{size}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -526,8 +529,16 @@ export const ListView = ({
           <TableBody>
             {filteredAndSortedDeals.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={visibleColumns.length + 2} className="text-center py-8 text-muted-foreground">
-                  No deals found
+                <TableCell colSpan={visibleColumns.length + 2} className="text-center py-8">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <Briefcase className="w-10 h-10 opacity-50" />
+                    <p>No deals found</p>
+                    {hasActiveFilters && (
+                      <Button variant="link" size="sm" onClick={clearAllFilters}>
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -602,52 +613,49 @@ export const ListView = ({
         </div>
       </Card>
 
-      <div className="flex-shrink-0 bg-background">
-        {selectedDeals.size > 0 && (
-          <BulkActionsBar
-            selectedCount={selectedDeals.size}
-            onDelete={handleBulkDelete}
-            onExport={handleBulkExport}
-            onClearSelection={() => setSelectedDeals(new Set())}
-          />
-        )}
+      {/* Bulk Actions */}
+      {selectedDeals.size > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedDeals.size}
+          onDelete={handleBulkDelete}
+          onExport={handleBulkExport}
+          onClearSelection={() => setSelectedDeals(new Set())}
+        />
+      )}
 
-        {/* Pagination */}
-        {totalPages > 0 && (
-          <div className="flex items-center justify-between py-4 px-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">
-                Showing {filteredAndSortedDeals.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredAndSortedDeals.length)} of {filteredAndSortedDeals.length} deals
-              </span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
-                disabled={currentPage === 1}
-                aria-label="Go to previous page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                <span className="hidden sm:inline ml-1">Previous</span>
-              </Button>
-              <span className="text-sm px-3 py-1 bg-muted rounded-md font-medium">
-                Page {currentPage} of {totalPages || 1}
-              </span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
-                disabled={currentPage === totalPages}
-                aria-label="Go to next page"
-              >
-                <span className="hidden sm:inline mr-1">Next</span>
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
+      {/* Pagination */}
+      {totalPages > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Showing {filteredAndSortedDeals.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedDeals.length)} of {filteredAndSortedDeals.length} deals
+            </span>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </Button>
+            <span className="text-sm">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       <TaskModal
         open={taskModalOpen}
