@@ -516,7 +516,7 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col h-full space-y-3">
       {/* Header and Actions */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
@@ -605,12 +605,12 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
       </div>
 
       {/* Table */}
-      <Card>
-        <div className="overflow-auto">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <div className="relative overflow-auto flex-1">
           <Table>
-            <TableHeader className="sticky top-0 z-10">
-              <TableRow className="bg-muted/50 hover:bg-muted/60 border-b-2">
-                <TableHead className="w-12 text-center font-bold text-foreground bg-muted/50">
+            <TableHeader>
+              <TableRow className="sticky top-0 z-20 bg-muted border-b-2">
+                <TableHead className="w-12 text-center font-bold text-foreground">
                   <div className="flex justify-center">
                     <Checkbox
                       checked={selectedContacts.length > 0 && selectedContacts.length === Math.min(pageContacts.length, 50)}
@@ -621,7 +621,7 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
                 {visibleColumns.map(column => (
                   <TableHead
                     key={column.field}
-                    className="text-left font-bold text-foreground bg-muted/50 px-4 py-3 whitespace-nowrap"
+                    className="text-left font-bold text-foreground px-4 py-3 whitespace-nowrap"
                   >
                     <div
                       className="group flex items-center gap-2 cursor-pointer hover:text-primary"
@@ -632,7 +632,7 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
                     </div>
                   </TableHead>
                 ))}
-                <TableHead className="text-center font-bold text-foreground bg-muted/50 w-32 px-4 py-3">
+                <TableHead className="text-center font-bold text-foreground w-32 px-4 py-3">
                   Actions
                 </TableHead>
               </TableRow>

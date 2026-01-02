@@ -158,7 +158,7 @@ export const TaskListView = ({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col h-full space-y-3">
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative w-64">
@@ -212,20 +212,20 @@ export const TaskListView = ({
       </div>
 
       {/* Task Table */}
-      <Card>
-        <div className="overflow-auto max-h-[calc(100vh-280px)]">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <div className="relative overflow-auto flex-1">
           <Table>
             <TableHeader>
-              <TableRow className="sticky top-0 z-20 bg-muted">
-              <TableHead className="w-10"></TableHead>
-              <TableHead>Task</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead>Assigned To</TableHead>
-              <TableHead>Linked To</TableHead>
-              <TableHead>Task Owner</TableHead>
-              <TableHead className="w-20">Actions</TableHead>
+              <TableRow className="sticky top-0 z-20 bg-muted border-b-2">
+              <TableHead className="w-10 font-bold text-foreground"></TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Task</TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Status</TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Priority</TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Due Date</TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Assigned To</TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Linked To</TableHead>
+              <TableHead className="font-bold text-foreground px-4 py-3">Task Owner</TableHead>
+              <TableHead className="w-32 text-center font-bold text-foreground px-4 py-3">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -243,7 +243,7 @@ export const TaskListView = ({
                 return (
                   <TableRow 
                     key={task.id} 
-                    className={`hover:bg-muted/20 ${
+                    className={`hover:bg-muted/20 border-b group ${
                       dueDateInfo.isOverdue ? 'bg-red-50 dark:bg-red-900/10' : ''
                     }`}
                   >

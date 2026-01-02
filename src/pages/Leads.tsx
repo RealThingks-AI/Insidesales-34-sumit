@@ -184,7 +184,7 @@ const Leads = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 min-h-0 overflow-auto px-4 pt-2 pb-4">
+      <div className="flex-1 min-h-0 flex flex-col px-4 pt-2 pb-4">
         <LeadTable 
           ref={leadTableRef}
           showColumnCustomizer={showColumnCustomizer} 

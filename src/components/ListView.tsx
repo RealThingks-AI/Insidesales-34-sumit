@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -409,7 +410,7 @@ export const ListView = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="h-full flex flex-col bg-background space-y-3">
       <div className="flex-shrink-0 px-4 py-2 bg-background border-b border-border">
         <div className="flex flex-col lg:flex-row gap-2 items-start lg:items-center justify-between">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1 min-w-0">
@@ -474,11 +475,12 @@ export const ListView = ({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto">
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <div className="relative overflow-auto flex-1">
         <Table ref={tableRef} className="w-full">
-          <TableHeader className="sticky top-0 bg-primary/5 backdrop-blur-sm z-20 border-b-2 border-primary/20">
-            <TableRow className="hover:bg-primary/10 transition-colors border-b border-primary/20">
-              <TableHead className="w-12 min-w-12 bg-primary/10 border-r border-primary/20">
+          <TableHeader>
+            <TableRow className="sticky top-0 z-20 bg-muted border-b-2">
+              <TableHead className="w-12 min-w-12 text-center font-bold text-foreground">
                 <Checkbox
                   checked={selectedDeals.size === paginatedDeals.length && paginatedDeals.length > 0}
                   onCheckedChange={handleSelectAll}
@@ -488,7 +490,7 @@ export const ListView = ({
               {visibleColumns.map(column => (
                 <TableHead 
                   key={column.field} 
-                  className="font-semibold cursor-pointer hover:bg-primary/15 transition-colors relative bg-primary/10 border-r border-primary/20 text-primary-foreground"
+                  className="font-bold text-foreground px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors relative whitespace-nowrap"
                   style={{ 
                     width: `${columnWidths[column.field] || 120}px`,
                     minWidth: `${columnWidths[column.field] || 120}px`,
@@ -518,7 +520,7 @@ export const ListView = ({
                   />
                 </TableHead>
               ))}
-              <TableHead className="w-32 min-w-32 bg-primary/10 border-r border-primary/20 text-foreground font-bold">Actions</TableHead>
+              <TableHead className="w-32 text-center font-bold text-foreground px-4 py-3">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -532,25 +534,21 @@ export const ListView = ({
               paginatedDeals.map((deal) => (
                 <TableRow 
                   key={deal.id} 
-                  className={`hover:bg-primary/5 transition-all duration-200 hover:shadow-sm ${
-                    selectedDeals.has(deal.id) ? 'bg-primary/10 shadow-sm' : ''
-                  }`}
-                  style={{ 
-                    background: selectedDeals.has(deal.id) ? 'hsl(var(--primary) / 0.1)' : undefined,
-                    borderLeft: selectedDeals.has(deal.id) ? '3px solid hsl(var(--primary))' : undefined 
-                  }}
+                  className={`hover:bg-muted/20 border-b group ${selectedDeals.has(deal.id) ? 'bg-muted/30' : ''}`}
+                  data-state={selectedDeals.has(deal.id) ? "selected" : undefined}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedDeals.has(deal.id)}
-                      onCheckedChange={(checked) => handleSelectDeal(deal.id, Boolean(checked))}
-                      className="transition-all hover:scale-110"
-                    />
+                  <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-4 py-3">
+                    <div className="flex justify-center">
+                      <Checkbox
+                        checked={selectedDeals.has(deal.id)}
+                        onCheckedChange={(checked) => handleSelectDeal(deal.id, Boolean(checked))}
+                      />
+                    </div>
                   </TableCell>
                   {visibleColumns.map(column => (
                     <TableCell 
                       key={column.field} 
-                      className="font-medium"
+                      className="text-left px-4 py-3 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]"
                       style={{ 
                         width: `${columnWidths[column.field] || 120}px`,
                         minWidth: `${columnWidths[column.field] || 120}px`,
@@ -568,7 +566,7 @@ export const ListView = ({
                       />
                     </TableCell>
                   ))}
-                  <TableCell>
+                  <TableCell className="w-20 px-4 py-3">
                     <div className="flex items-center justify-center">
                       <RowActionsDropdown
                         actions={[
@@ -600,10 +598,11 @@ export const ListView = ({
               ))
             )}
           </TableBody>
-        </Table>
-      </div>
+          </Table>
+        </div>
+      </Card>
 
-      <div className="flex-shrink-0 bg-background border-t">
+      <div className="flex-shrink-0 bg-background">
         {selectedDeals.size > 0 && (
           <BulkActionsBar
             selectedCount={selectedDeals.size}
@@ -613,54 +612,27 @@ export const ListView = ({
           />
         )}
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <span className="text-base font-semibold text-foreground">Total: <strong className="text-primary">{filteredAndSortedDeals.length}</strong> deals</span>
-            {hasActiveFilters && (
-              <div className="flex items-center gap-2">
-                <span>Active filters:</span>
-                {filters.stages.length > 0 && <Badge variant="secondary">Stages: {filters.stages.join(', ')}</Badge>}
-                {filters.regions.length > 0 && <Badge variant="secondary">Regions: {filters.regions.join(', ')}</Badge>}
-                {filters.leadOwners.length > 0 && <Badge variant="secondary">Owners: {filters.leadOwners.join(', ')}</Badge>}
-                {filters.priorities.length > 0 && <Badge variant="secondary">Priorities: {filters.priorities.join(', ')}</Badge>}
-                {filters.probabilities.length > 0 && <Badge variant="secondary">Probabilities: {filters.probabilities.join(', ')}%</Badge>}
-                {searchTerm && <Badge variant="secondary">Search: {searchTerm}</Badge>}
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="h-6 px-2 text-xs"
-                >
-                  Clear All
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {totalPages > 1 && (
+        {/* Pagination */}
+        {totalPages > 0 && (
+          <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-              >
+              <span className="text-sm text-muted-foreground">
+                Showing {filteredAndSortedDeals.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedDeals.length)} of {filteredAndSortedDeals.length} deals
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
                 Previous
               </Button>
-              <span className="text-sm text-muted-foreground px-3">
-                Page {currentPage} of {totalPages}
+              <span className="text-sm">
+                Page {currentPage} of {totalPages || 1}
               </span>
-              <Button
-                variant="outline"
-                size="sm"  
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-              >
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
                 Next
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <TaskModal
