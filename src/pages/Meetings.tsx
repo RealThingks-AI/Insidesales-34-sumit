@@ -607,18 +607,18 @@ const Meetings = () => {
                         <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
                         No meetings found
                       </TableCell>
-                    </TableRow> : paginatedMeetings.map(meeting => <TableRow key={meeting.id} className={selectedMeetings.includes(meeting.id) ? "bg-muted/50" : ""}>
+                    </TableRow> : paginatedMeetings.map(meeting => <TableRow key={meeting.id} className={`hover:bg-muted/20 border-b group ${selectedMeetings.includes(meeting.id) ? "bg-muted/50" : ""}`}>
                         <TableCell className="text-center px-4 py-3">
                           <div className="flex justify-center">
                             <Checkbox checked={selectedMeetings.includes(meeting.id)} onCheckedChange={checked => handleSelectMeeting(meeting.id, !!checked)} aria-label={`Select ${meeting.subject}`} />
                           </div>
-                          <TableCell className="font-medium text-primary cursor-pointer hover:underline" onClick={() => {
-                            setEditingMeeting(meeting);
-                            setShowModal(true);
-                          }}>
-                            {meeting.subject}
-                          </TableCell>
-                        )}
+                        </TableCell>
+                        <TableCell className="font-medium text-primary cursor-pointer hover:underline px-4 py-3" onClick={() => {
+                          setEditingMeeting(meeting);
+                          setShowModal(true);
+                        }}>
+                          {meeting.subject}
+                        </TableCell>
                         {isColumnVisible('date') && (
                           <TableCell className="text-sm px-4 py-3">
                             {format(new Date(meeting.start_time), 'dd/MM/yyyy')}
