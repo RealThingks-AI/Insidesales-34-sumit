@@ -548,11 +548,12 @@ const Meetings = () => {
             </div>
 
             {/* Table */}
-            <Card>
+            <Card className="flex-1 min-h-0 flex flex-col">
+              <div className="relative overflow-auto flex-1">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[50px]">
+                  <TableRow className="sticky top-0 z-20 bg-muted border-b-2">
+                    <TableHead className="w-[50px] text-center font-bold text-foreground">
                       <Checkbox checked={isAllSelected} ref={el => {
                     if (el) {
                       (el as any).indeterminate = isSomeSelected;
@@ -560,44 +561,44 @@ const Meetings = () => {
                   }} onCheckedChange={handleSelectAll} aria-label="Select all" />
                     </TableHead>
                     {isColumnVisible('subject') && (
-                      <TableHead className="min-w-[200px]">
-                        <button onClick={() => handleSort('subject')} className="group flex items-center hover:text-foreground transition-colors">
+                      <TableHead className="min-w-[200px] font-bold text-foreground px-4 py-3">
+                        <button onClick={() => handleSort('subject')} className="group flex items-center gap-2 cursor-pointer hover:text-primary">
                           Subject {getSortIcon('subject')}
                         </button>
                       </TableHead>
                     )}
                     {isColumnVisible('date') && (
-                      <TableHead>
-                        <button onClick={() => handleSort('date')} className="group flex items-center hover:text-foreground transition-colors">
+                      <TableHead className="font-bold text-foreground px-4 py-3">
+                        <button onClick={() => handleSort('date')} className="group flex items-center gap-2 cursor-pointer hover:text-primary">
                           Date {getSortIcon('date')}
                         </button>
                       </TableHead>
                     )}
                     {isColumnVisible('time') && (
-                      <TableHead>
-                        <button onClick={() => handleSort('time')} className="group flex items-center hover:text-foreground transition-colors">
+                      <TableHead className="font-bold text-foreground px-4 py-3">
+                        <button onClick={() => handleSort('time')} className="group flex items-center gap-2 cursor-pointer hover:text-primary">
                           Time {getSortIcon('time')}
                         </button>
                       </TableHead>
                     )}
                     {isColumnVisible('lead_contact') && (
-                      <TableHead>
-                        <button onClick={() => handleSort('lead_contact')} className="group flex items-center hover:text-foreground transition-colors">
+                      <TableHead className="font-bold text-foreground px-4 py-3">
+                        <button onClick={() => handleSort('lead_contact')} className="group flex items-center gap-2 cursor-pointer hover:text-primary">
                           Lead/Contact {getSortIcon('lead_contact')}
                         </button>
                       </TableHead>
                     )}
                     {isColumnVisible('status') && (
-                      <TableHead>
-                        <button onClick={() => handleSort('status')} className="group flex items-center hover:text-foreground transition-colors">
+                      <TableHead className="font-bold text-foreground px-4 py-3">
+                        <button onClick={() => handleSort('status')} className="group flex items-center gap-2 cursor-pointer hover:text-primary">
                           Status {getSortIcon('status')}
                         </button>
                       </TableHead>
                     )}
-                    {isColumnVisible('outcome') && <TableHead>Outcome</TableHead>}
-                    {isColumnVisible('join_url') && <TableHead>Join URL</TableHead>}
-                    {isColumnVisible('organizer') && <TableHead>Organizer</TableHead>}
-                    <TableHead className="w-[100px]">Actions</TableHead>
+                    {isColumnVisible('outcome') && <TableHead className="font-bold text-foreground px-4 py-3">Outcome</TableHead>}
+                    {isColumnVisible('join_url') && <TableHead className="font-bold text-foreground px-4 py-3">Join URL</TableHead>}
+                    {isColumnVisible('organizer') && <TableHead className="font-bold text-foreground px-4 py-3">Organizer</TableHead>}
+                    <TableHead className="w-32 text-center font-bold text-foreground px-4 py-3">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -607,10 +608,10 @@ const Meetings = () => {
                         No meetings found
                       </TableCell>
                     </TableRow> : paginatedMeetings.map(meeting => <TableRow key={meeting.id} className={selectedMeetings.includes(meeting.id) ? "bg-muted/50" : ""}>
-                        <TableCell>
-                          <Checkbox checked={selectedMeetings.includes(meeting.id)} onCheckedChange={checked => handleSelectMeeting(meeting.id, !!checked)} aria-label={`Select ${meeting.subject}`} />
-                        </TableCell>
-                        {isColumnVisible('subject') && (
+                        <TableCell className="text-center px-4 py-3">
+                          <div className="flex justify-center">
+                            <Checkbox checked={selectedMeetings.includes(meeting.id)} onCheckedChange={checked => handleSelectMeeting(meeting.id, !!checked)} aria-label={`Select ${meeting.subject}`} />
+                          </div>
                           <TableCell className="font-medium text-primary cursor-pointer hover:underline" onClick={() => {
                             setEditingMeeting(meeting);
                             setShowModal(true);
@@ -619,26 +620,26 @@ const Meetings = () => {
                           </TableCell>
                         )}
                         {isColumnVisible('date') && (
-                          <TableCell className="text-sm">
+                          <TableCell className="text-sm px-4 py-3">
                             {format(new Date(meeting.start_time), 'dd/MM/yyyy')}
                           </TableCell>
                         )}
                         {isColumnVisible('time') && (
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell className="text-sm text-muted-foreground px-4 py-3">
                             {format(new Date(meeting.start_time), 'HH:mm')} - {format(new Date(meeting.end_time), 'HH:mm')}
                           </TableCell>
                         )}
                         {isColumnVisible('lead_contact') && (
-                          <TableCell>
+                          <TableCell className="px-4 py-3">
                             {meeting.lead_name && <div>Lead: {meeting.lead_name}</div>}
                             {meeting.contact_name && <div>Contact: {meeting.contact_name}</div>}
                             {!meeting.lead_name && !meeting.contact_name && <span className="text-muted-foreground">—</span>}
                           </TableCell>
                         )}
-                        {isColumnVisible('status') && <TableCell>{getStatusBadge(meeting)}</TableCell>}
-                        {isColumnVisible('outcome') && <TableCell>{getOutcomeBadge(meeting.outcome || null)}</TableCell>}
+                        {isColumnVisible('status') && <TableCell className="px-4 py-3">{getStatusBadge(meeting)}</TableCell>}
+                        {isColumnVisible('outcome') && <TableCell className="px-4 py-3">{getOutcomeBadge(meeting.outcome || null)}</TableCell>}
                         {isColumnVisible('join_url') && (
-                          <TableCell>
+                          <TableCell className="px-4 py-3">
                             {meeting.join_url ? (
                               <a 
                                 href={meeting.join_url} 
@@ -659,7 +660,7 @@ const Meetings = () => {
                           </TableCell>
                         )}
                         {isColumnVisible('organizer') && (
-                          <TableCell>
+                          <TableCell className="px-4 py-3">
                             <div className="flex items-center gap-1 text-sm">
                               <User className="h-3 w-3 text-muted-foreground" />
                               <span className="truncate max-w-[120px]">
@@ -668,8 +669,8 @@ const Meetings = () => {
                             </div>
                           </TableCell>
                         )}
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                        <TableCell className="w-20 px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
                             <Button variant="ghost" size="icon" onClick={() => {
                               setEditingMeeting(meeting);
                               setShowModal(true);
@@ -685,19 +686,30 @@ const Meetings = () => {
                           </div>
                         </TableCell>
                       </TableRow>)}
-                </TableBody>
-              </Table>
+              </TableBody>
+            </Table>
+              </div>
               
               {/* Pagination */}
-              {filteredMeetings.length > ITEMS_PER_PAGE && (
-                <TablePagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  itemsPerPage={ITEMS_PER_PAGE}
-                  totalItems={filteredMeetings.length}
-                  onPageChange={setCurrentPage}
-                  entityName="meetings"
-                />
+              {totalPages > 0 && (
+                <div className="flex items-center justify-between p-4 border-t">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      Showing {filteredMeetings.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredMeetings.length)} of {filteredMeetings.length} meetings
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
+                      Previous
+                    </Button>
+                    <span className="text-sm">
+                      Page {currentPage} of {totalPages || 1}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
               )}
             </Card>
           </div>}
