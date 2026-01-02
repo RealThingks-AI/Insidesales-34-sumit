@@ -10,7 +10,6 @@ import { Search, Filter, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Brief
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RowActionsDropdown, Edit, Trash2, CheckSquare } from "./RowActionsDropdown";
 import { format } from "date-fns";
-import { InlineEditCell } from "./InlineEditCell";
 import { DealColumnCustomizer, DealColumnConfig, defaultDealColumns } from "./DealColumnCustomizer";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { DealsAdvancedFilter, AdvancedFilterState } from "./DealsAdvancedFilter";
@@ -23,6 +22,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useColumnPreferences } from "@/hooks/useColumnPreferences";
 import { DeleteConfirmDialog } from "./shared/DeleteConfirmDialog";
 import { ClearFiltersButton } from "./shared/ClearFiltersButton";
+import { HighlightedText } from "./shared/HighlightedText";
+import { useUserDisplayNames } from "@/hooks/useUserDisplayNames";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -60,6 +61,12 @@ export const ListView = ({
   const [selectedDeals, setSelectedDeals] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+
+  // Get owner IDs for display names
+  const ownerIds = useMemo(() => {
+    return [...new Set(deals.map(d => d.lead_owner).filter(Boolean))] as string[];
+  }, [deals]);
+  const { displayNames } = useUserDisplayNames(ownerIds);
 
   // Sync stage filter when initialStageFilter prop changes (from URL)
   useEffect(() => {
@@ -147,6 +154,53 @@ export const ListView = ({
     } catch {
       return '-';
     }
+  };
+
+  // Stage badge styling (matching Accounts module)
+  const getStageBadgeClasses = (stage?: string) => {
+    switch (stage) {
+      case 'Won':
+        return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border-emerald-200';
+      case 'Dropped':
+        return 'bg-gray-100 text-gray-600 dark:bg-gray-800/30 dark:text-gray-400 border-gray-200';
+      case 'Lead':
+        return 'bg-slate-100 text-slate-700 dark:bg-slate-800/30 dark:text-slate-300 border-slate-200';
+      case 'Qualified':
+        return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border-blue-200';
+      case 'Discussions':
+        return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 border-amber-200';
+      case 'Offered':
+        return 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300 border-purple-200';
+      case 'RFQ':
+        return 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300 border-indigo-200';
+      default:
+        return 'bg-muted text-muted-foreground border-border';
+    }
+  };
+
+  // Generate initials from project name
+  const getProjectInitials = (name: string) => {
+    return name.split(' ').slice(0, 2).map(word => word.charAt(0).toUpperCase()).join('');
+  };
+
+  // Generate consistent color from project name
+  const getAvatarColor = (name: string) => {
+    const colors = ['bg-slate-500', 'bg-slate-600', 'bg-zinc-500', 'bg-gray-500', 'bg-stone-500', 'bg-neutral-500', 'bg-slate-700', 'bg-zinc-600'];
+    const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+    return colors[index];
+  };
+
+  // Get priority label
+  const getPriorityLabel = (priority?: number) => {
+    if (!priority) return '-';
+    const labels: Record<number, string> = {
+      1: 'Highest',
+      2: 'High',
+      3: 'Medium',
+      4: 'Low',
+      5: 'Lowest'
+    };
+    return labels[priority] || 'Unknown';
   };
 
   // Handle column resize
@@ -559,22 +613,68 @@ export const ListView = ({
                   {visibleColumns.map(column => (
                     <TableCell 
                       key={column.field} 
-                      className="text-left px-4 py-3 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]"
+                      className="text-left px-4 py-3 align-middle whitespace-nowrap overflow-hidden text-ellipsis"
                       style={{ 
                         width: `${columnWidths[column.field] || 120}px`,
                         minWidth: `${columnWidths[column.field] || 120}px`,
                         maxWidth: `${columnWidths[column.field] || 120}px`
                       }}
                     >
-                      <InlineEditCell
-                        value={deal[column.field as keyof Deal]}
-                        field={column.field}
-                        dealId={deal.id}
-                        onSave={handleInlineEdit}
-                        type={getFieldType(column.field)}
-                        options={getFieldOptions(column.field)}
-                        userOptions={column.field === 'lead_owner' ? allProfiles : undefined}
-                      />
+                      {column.field === 'project_name' || column.field === 'deal_name' ? (
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-full ${getAvatarColor(deal[column.field as keyof Deal]?.toString() || '')} flex items-center justify-center text-white text-xs font-medium shrink-0`}>
+                            {getProjectInitials(deal[column.field as keyof Deal]?.toString() || '')}
+                          </div>
+                          <button 
+                            onClick={() => onDealClick(deal)}
+                            className="text-primary hover:underline font-medium text-left truncate"
+                          >
+                            <HighlightedText text={deal[column.field as keyof Deal]?.toString() || '-'} highlight={searchTerm} />
+                          </button>
+                        </div>
+                      ) : column.field === 'customer_name' ? (
+                        <span className="truncate block">
+                          <HighlightedText text={deal.customer_name || '-'} highlight={searchTerm} />
+                        </span>
+                      ) : column.field === 'lead_name' ? (
+                        <span className="truncate block">
+                          <HighlightedText text={deal.lead_name || '-'} highlight={searchTerm} />
+                        </span>
+                      ) : column.field === 'stage' ? (
+                        deal.stage ? (
+                          <Badge variant="outline" className={`whitespace-nowrap ${getStageBadgeClasses(deal.stage)}`}>
+                            {deal.stage}
+                          </Badge>
+                        ) : <span className="text-muted-foreground">-</span>
+                      ) : column.field === 'priority' ? (
+                        <span className="truncate block">
+                          {deal.priority ? `${deal.priority} (${getPriorityLabel(deal.priority)})` : '-'}
+                        </span>
+                      ) : column.field === 'total_contract_value' || column.field === 'total_revenue' ? (
+                        <span className="font-medium">{formatCurrency(deal[column.field as keyof Deal] as number, deal.currency_type)}</span>
+                      ) : column.field === 'probability' ? (
+                        <span className={`font-medium ${
+                          (deal.probability || 0) >= 70 ? 'text-green-600 dark:text-green-400' : 
+                          (deal.probability || 0) >= 40 ? 'text-amber-600 dark:text-amber-400' : 
+                          'text-muted-foreground'
+                        }`}>
+                          {deal.probability != null ? `${deal.probability}%` : '-'}
+                        </span>
+                      ) : column.field === 'expected_closing_date' || column.field === 'start_date' || column.field === 'end_date' || column.field === 'proposal_due_date' ? (
+                        <span className="truncate block">{formatDate(deal[column.field as keyof Deal] as string)}</span>
+                      ) : column.field === 'lead_owner' ? (
+                        <span className="truncate block">
+                          {deal.lead_owner ? (displayNames[deal.lead_owner] || "Loading...") : '-'}
+                        </span>
+                      ) : column.field === 'region' ? (
+                        <span className="truncate block">{deal.region || '-'}</span>
+                      ) : column.field === 'project_duration' ? (
+                        <span className="truncate block">{deal.project_duration ? `${deal.project_duration} months` : '-'}</span>
+                      ) : (
+                        <span title={deal[column.field as keyof Deal]?.toString() || '-'} className="truncate block">
+                          {deal[column.field as keyof Deal]?.toString() || '-'}
+                        </span>
+                      )}
                     </TableCell>
                   ))}
                   <TableCell className="w-20 px-4 py-3">
