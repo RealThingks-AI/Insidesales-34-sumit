@@ -1,201 +1,300 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { Deal, DealStage } from "@/types/deal";
+import { DealForm } from "@/components/DealForm";
+import { DashboardStats } from "@/components/dashboard/DashboardStats";
+import { DashboardContent } from "@/components/dashboard/DashboardContent";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { LayoutGrid, List, Plus, LogOut } from "lucide-react";
 
 const Index = () => {
-  const [display, setDisplay] = useState("0");
-  const [previousValue, setPreviousValue] = useState<number | null>(null);
-  const [operator, setOperator] = useState<string | null>(null);
-  const [waitingForOperand, setWaitingForOperand] = useState(false);
+  const { user, loading: authLoading, signOut } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [initialStage, setInitialStage] = useState<DealStage>('Lead');
+  const [activeView, setActiveView] = useState<'kanban' | 'list'>('kanban');
 
-  const inputDigit = (digit: string) => {
-    if (waitingForOperand) {
-      setDisplay(digit);
-      setWaitingForOperand(false);
-    } else {
-      setDisplay(display === "0" ? digit : display + digit);
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
     }
-  };
+  }, [user, authLoading, navigate]);
 
-  const inputDecimal = () => {
-    if (waitingForOperand) {
-      setDisplay("0.");
-      setWaitingForOperand(false);
-      return;
+  useEffect(() => {
+    if (user) {
+      fetchDeals();
     }
-    if (!display.includes(".")) {
-      setDisplay(display + ".");
-    }
-  };
+  }, [user]);
 
-  const clear = () => {
-    setDisplay("0");
-    setPreviousValue(null);
-    setOperator(null);
-    setWaitingForOperand(false);
-  };
+  const fetchDeals = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('deals')
+        .select('*')
+        .order('modified_at', { ascending: false });
 
-  const performOperation = (nextOperator: string) => {
-    const inputValue = parseFloat(display);
-
-    if (previousValue === null) {
-      setPreviousValue(inputValue);
-    } else if (operator) {
-      const currentValue = previousValue || 0;
-      let result: number;
-
-      switch (operator) {
-        case "+":
-          result = currentValue + inputValue;
-          break;
-        case "-":
-          result = currentValue - inputValue;
-          break;
-        case "×":
-          result = currentValue * inputValue;
-          break;
-        case "÷":
-          result = currentValue / inputValue;
-          break;
-        default:
-          result = inputValue;
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to fetch deals",
+          variant: "destructive",
+        });
+        return;
       }
 
-      setDisplay(String(result));
-      setPreviousValue(result);
+      setDeals((data || []) as unknown as Deal[]);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setWaitingForOperand(true);
-    setOperator(nextOperator);
   };
 
-  const calculate = () => {
-    if (!operator || previousValue === null) return;
+  const handleUpdateDeal = async (dealId: string, updates: Partial<Deal>) => {
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .update({ ...updates, modified_at: new Date().toISOString() })
+        .eq('id', dealId);
 
-    const inputValue = parseFloat(display);
-    let result: number;
+      if (error) throw error;
 
-    switch (operator) {
-      case "+":
-        result = previousValue + inputValue;
-        break;
-      case "-":
-        result = previousValue - inputValue;
-        break;
-      case "×":
-        result = previousValue * inputValue;
-        break;
-      case "÷":
-        result = previousValue / inputValue;
-        break;
-      default:
-        return;
+      setDeals(prev => prev.map(deal => 
+        deal.id === dealId ? { ...deal, ...updates } : deal
+      ));
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update deal",
+        variant: "destructive",
+      });
     }
-
-    setDisplay(String(result));
-    setPreviousValue(null);
-    setOperator(null);
-    setWaitingForOperand(true);
   };
 
-  const toggleSign = () => {
-    setDisplay(String(parseFloat(display) * -1));
+  const handleSaveDeal = async (dealData: Partial<Deal>) => {
+    try {
+      if (isCreating) {
+        const { data, error } = await supabase
+          .from('deals')
+          .insert([{ 
+            ...dealData, 
+            deal_name: dealData.project_name || 'Untitled Deal',
+            created_by: user?.id,
+            modified_by: user?.id 
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setDeals(prev => [data as unknown as Deal, ...prev]);
+      } else if (selectedDeal) {
+        const updateData = {
+          ...dealData,
+          deal_name: dealData.project_name || selectedDeal.project_name || 'Untitled Deal',
+          modified_at: new Date().toISOString(),
+          modified_by: user?.id
+        };
+        
+        console.log("Updating deal with data:", updateData);
+        
+        await handleUpdateDeal(selectedDeal.id, updateData);
+        
+        await fetchDeals();
+      }
+    } catch (error) {
+      console.error("Error in handleSaveDeal:", error);
+      throw error;
+    }
   };
 
-  const percentage = () => {
-    setDisplay(String(parseFloat(display) / 100));
+  const handleDeleteDeals = async (dealIds: string[]) => {
+    try {
+      const { error } = await supabase
+        .from('deals')
+        .delete()
+        .in('id', dealIds);
+
+      if (error) throw error;
+
+      setDeals(prev => prev.filter(deal => !dealIds.includes(deal.id)));
+      
+      toast({
+        title: "Success",
+        description: `Deleted ${dealIds.length} deal(s)`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete deals",
+        variant: "destructive",
+      });
+    }
   };
 
-  const CalcButton = ({
-    children,
-    onClick,
-    variant = "default",
-    className = "",
-  }: {
-    children: React.ReactNode;
-    onClick: () => void;
-    variant?: "default" | "operator" | "function";
-    className?: string;
-  }) => {
-    const baseStyles = "h-16 w-16 text-xl font-medium rounded-full transition-all duration-200 hover:scale-105";
-    const variantStyles = {
-      default: "bg-muted text-foreground hover:bg-muted/80",
-      operator: "bg-primary text-primary-foreground hover:bg-primary/90",
-      function: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-    };
+  const handleImportDeals = async (importedDeals: (Partial<Deal> & { shouldUpdate?: boolean })[]) => {
+    try {
+      let createdCount = 0;
+      let updatedCount = 0;
 
+      for (const importDeal of importedDeals) {
+        const { shouldUpdate, ...dealData } = importDeal;
+        
+        const existingDeal = deals.find(d => 
+          (dealData.id && d.id === dealData.id) || 
+          (dealData.project_name && d.project_name === dealData.project_name)
+        );
+
+        if (existingDeal) {
+          const { data, error } = await supabase
+            .from('deals')
+            .update({
+              ...dealData,
+              modified_by: user?.id,
+              deal_name: dealData.project_name || existingDeal.deal_name
+            })
+            .eq('id', existingDeal.id)
+            .select()
+            .single();
+
+          if (error) throw error;
+          updatedCount++;
+        } else {
+          const newDealData = {
+            ...dealData,
+            stage: dealData.stage || 'Lead' as const,
+            created_by: user?.id,
+            modified_by: user?.id,
+            deal_name: dealData.project_name || `Imported Deal ${Date.now()}`
+          };
+
+          const { data, error } = await supabase
+            .from('deals')
+            .insert(newDealData)
+            .select()
+            .single();
+
+          if (error) throw error;
+          createdCount++;
+        }
+      }
+
+      await fetchDeals();
+      
+      toast({
+        title: "Import successful",
+        description: `Created ${createdCount} new deals, updated ${updatedCount} existing deals`,
+      });
+    } catch (error) {
+      console.error('Import error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to import deals. Please check the CSV format.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCreateDeal = (stage: DealStage) => {
+    setInitialStage(stage);
+    setIsCreating(true);
+    setSelectedDeal(null);
+    setIsFormOpen(true);
+  };
+
+  const handleDealClick = (deal: Deal) => {
+    setSelectedDeal(deal);
+    setIsCreating(false);
+    setIsFormOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setSelectedDeal(null);
+    setIsCreating(false);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/auth");
+  };
+
+  if (authLoading || loading) {
     return (
-      <Button
-        onClick={onClick}
-        className={`${baseStyles} ${variantStyles[variant]} ${className}`}
-      >
-        {children}
-      </Button>
-    );
-  };
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-xs rounded-3xl bg-card p-6 shadow-2xl">
-        {/* Display */}
-        <div className="mb-6 flex h-24 items-end justify-end rounded-2xl bg-muted/50 px-4 py-3">
-          <span className="text-4xl font-light text-foreground truncate">
-            {display.length > 12 ? parseFloat(display).toExponential(5) : display}
-          </span>
-        </div>
-
-        {/* Buttons Grid */}
-        <div className="grid grid-cols-4 gap-3">
-          {/* Row 1 */}
-          <CalcButton onClick={clear} variant="function">
-            AC
-          </CalcButton>
-          <CalcButton onClick={toggleSign} variant="function">
-            ±
-          </CalcButton>
-          <CalcButton onClick={percentage} variant="function">
-            %
-          </CalcButton>
-          <CalcButton onClick={() => performOperation("÷")} variant="operator">
-            ÷
-          </CalcButton>
-
-          {/* Row 2 */}
-          <CalcButton onClick={() => inputDigit("7")}>7</CalcButton>
-          <CalcButton onClick={() => inputDigit("8")}>8</CalcButton>
-          <CalcButton onClick={() => inputDigit("9")}>9</CalcButton>
-          <CalcButton onClick={() => performOperation("×")} variant="operator">
-            ×
-          </CalcButton>
-
-          {/* Row 3 */}
-          <CalcButton onClick={() => inputDigit("4")}>4</CalcButton>
-          <CalcButton onClick={() => inputDigit("5")}>5</CalcButton>
-          <CalcButton onClick={() => inputDigit("6")}>6</CalcButton>
-          <CalcButton onClick={() => performOperation("-")} variant="operator">
-            −
-          </CalcButton>
-
-          {/* Row 4 */}
-          <CalcButton onClick={() => inputDigit("1")}>1</CalcButton>
-          <CalcButton onClick={() => inputDigit("2")}>2</CalcButton>
-          <CalcButton onClick={() => inputDigit("3")}>3</CalcButton>
-          <CalcButton onClick={() => performOperation("+")} variant="operator">
-            +
-          </CalcButton>
-
-          {/* Row 5 */}
-          <CalcButton
-            onClick={() => inputDigit("0")}
-            className="col-span-2 w-full"
-          >
-            0
-          </CalcButton>
-          <CalcButton onClick={inputDecimal}>.</CalcButton>
-          <CalcButton onClick={calculate} variant="operator">
-            =
-          </CalcButton>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Inline header to replace DashboardHeader */}
+      <header className="border-b bg-card sticky top-0 z-50">
+        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h1 className="text-lg font-semibold">Deals Pipeline</h1>
+            <ToggleGroup type="single" value={activeView} onValueChange={(v) => v && setActiveView(v as 'kanban' | 'list')}>
+              <ToggleGroupItem value="kanban" aria-label="Kanban View" className="h-8 px-3">
+                <LayoutGrid className="w-4 h-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" aria-label="List View" className="h-8 px-3">
+                <List className="w-4 h-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => handleCreateDeal('Lead')} size="sm" className="gap-2">
+              <Plus className="w-4 h-4" /> New Deal
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      <DashboardStats deals={deals} />
+
+      <DashboardContent
+        activeView={activeView}
+        deals={deals}
+        onUpdateDeal={handleUpdateDeal}
+        onDealClick={handleDealClick}
+        onCreateDeal={handleCreateDeal}
+        onDeleteDeals={handleDeleteDeals}
+        onImportDeals={handleImportDeals}
+        onRefresh={fetchDeals}
+      />
+
+      <DealForm
+        deal={selectedDeal}
+        isOpen={isFormOpen}
+        onClose={handleCloseForm}
+        onSave={handleSaveDeal}
+        onRefresh={fetchDeals}
+        isCreating={isCreating}
+        initialStage={initialStage}
+      />
     </div>
   );
 };
