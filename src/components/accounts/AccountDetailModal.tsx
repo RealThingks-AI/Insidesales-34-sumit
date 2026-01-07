@@ -510,7 +510,7 @@ export const AccountDetailModal = ({
             </TabsContent>
 
             <TabsContent value="activity" className="mt-4" forceMount hidden={activeTab !== 'activity'}>
-              <AccountActivityTimeline key={refreshKey} accountId={account.id} />
+              <AccountActivityTimeline key={refreshKey} accountId={account.id} onAddActivity={() => setShowActivityLog(true)} />
             </TabsContent>
 
             <TabsContent value="history" className="mt-4" forceMount hidden={activeTab !== 'history'}>
