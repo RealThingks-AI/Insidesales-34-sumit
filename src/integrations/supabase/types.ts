@@ -82,11 +82,8 @@ export type Database = {
           notes: string | null
           phone: string | null
           region: string | null
-          score: number | null
-          segment: string | null
           status: string | null
           tags: string[] | null
-          total_revenue: number | null
           updated_at: string | null
           website: string | null
         }
@@ -107,11 +104,8 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           region?: string | null
-          score?: number | null
-          segment?: string | null
           status?: string | null
           tags?: string[] | null
-          total_revenue?: number | null
           updated_at?: string | null
           website?: string | null
         }
@@ -132,11 +126,8 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           region?: string | null
-          score?: number | null
-          segment?: string | null
           status?: string | null
           tags?: string[] | null
-          total_revenue?: number | null
           updated_at?: string | null
           website?: string | null
         }
@@ -736,12 +727,52 @@ export type Database = {
           },
         ]
       }
+      deal_stage_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          deal_id: string
+          from_stage: string | null
+          id: string
+          notes: string | null
+          to_stage: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          deal_id: string
+          from_stage?: string | null
+          id?: string
+          notes?: string | null
+          to_stage: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          deal_id?: string
+          from_stage?: string | null
+          id?: string
+          notes?: string | null
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_stage_history_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deals: {
         Row: {
+          account_id: string | null
           action_items: string | null
           budget: string | null
           business_value: string | null
           closing: string | null
+          contact_id: string | null
           created_at: string | null
           created_by: string | null
           currency_type: string | null
@@ -786,10 +817,12 @@ export type Database = {
           won_reason: string | null
         }
         Insert: {
+          account_id?: string | null
           action_items?: string | null
           budget?: string | null
           business_value?: string | null
           closing?: string | null
+          contact_id?: string | null
           created_at?: string | null
           created_by?: string | null
           currency_type?: string | null
@@ -834,10 +867,12 @@ export type Database = {
           won_reason?: string | null
         }
         Update: {
+          account_id?: string | null
           action_items?: string | null
           budget?: string | null
           business_value?: string | null
           closing?: string | null
+          contact_id?: string | null
           created_at?: string | null
           created_by?: string | null
           currency_type?: string | null
@@ -881,7 +916,22 @@ export type Database = {
           total_revenue?: number | null
           won_reason?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "deals_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_history: {
         Row: {
@@ -1163,6 +1213,7 @@ export type Database = {
           company_name: string | null
           contact_owner: string | null
           contact_source: string | null
+          converted_from_contact_id: string | null
           country: string | null
           created_by: string | null
           created_time: string | null
@@ -1184,6 +1235,7 @@ export type Database = {
           company_name?: string | null
           contact_owner?: string | null
           contact_source?: string | null
+          converted_from_contact_id?: string | null
           country?: string | null
           created_by?: string | null
           created_time?: string | null
@@ -1205,6 +1257,7 @@ export type Database = {
           company_name?: string | null
           contact_owner?: string | null
           contact_source?: string | null
+          converted_from_contact_id?: string | null
           country?: string | null
           created_by?: string | null
           created_time?: string | null
@@ -1229,7 +1282,50 @@ export type Database = {
             referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "leads_converted_from_contact_id_fkey"
+            columns: ["converted_from_contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      maintenance: {
+        Row: {
+          asset_name: string
+          created_at: string
+          id: string
+          maintenance_type: string | null
+          notes: string | null
+          performed_by: string | null
+          scheduled_date: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_name: string
+          created_at?: string
+          id?: string
+          maintenance_type?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          scheduled_date: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_name?: string
+          created_at?: string
+          id?: string
+          maintenance_type?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          scheduled_date?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       meeting_follow_ups: {
         Row: {
@@ -1327,10 +1423,12 @@ export type Database = {
       }
       meetings: {
         Row: {
+          account_id: string | null
           attendees: Json | null
           contact_id: string | null
           created_at: string
           created_by: string | null
+          deal_id: string | null
           description: string | null
           end_time: string
           id: string
@@ -1344,10 +1442,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_id?: string | null
           attendees?: Json | null
           contact_id?: string | null
           created_at?: string
           created_by?: string | null
+          deal_id?: string | null
           description?: string | null
           end_time: string
           id?: string
@@ -1361,10 +1461,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_id?: string | null
           attendees?: Json | null
           contact_id?: string | null
           created_at?: string
           created_by?: string | null
+          deal_id?: string | null
           description?: string | null
           end_time?: string
           id?: string
@@ -1379,10 +1481,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "meetings_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "meetings_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meetings_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
             referencedColumns: ["id"]
           },
           {
@@ -1396,13 +1512,17 @@ export type Database = {
       }
       notification_preferences: {
         Row: {
+          accounts_notifications: boolean | null
+          contacts_notifications: boolean | null
           created_at: string
           deal_updates: boolean | null
           email_notifications: boolean | null
           id: string
           in_app_notifications: boolean | null
           lead_assigned: boolean | null
+          leads_notifications: boolean | null
           meeting_reminders: boolean | null
+          notification_frequency: string | null
           push_notifications: boolean | null
           task_reminders: boolean | null
           updated_at: string
@@ -1410,13 +1530,17 @@ export type Database = {
           weekly_digest: boolean | null
         }
         Insert: {
+          accounts_notifications?: boolean | null
+          contacts_notifications?: boolean | null
           created_at?: string
           deal_updates?: boolean | null
           email_notifications?: boolean | null
           id?: string
           in_app_notifications?: boolean | null
           lead_assigned?: boolean | null
+          leads_notifications?: boolean | null
           meeting_reminders?: boolean | null
+          notification_frequency?: string | null
           push_notifications?: boolean | null
           task_reminders?: boolean | null
           updated_at?: string
@@ -1424,13 +1548,17 @@ export type Database = {
           weekly_digest?: boolean | null
         }
         Update: {
+          accounts_notifications?: boolean | null
+          contacts_notifications?: boolean | null
           created_at?: string
           deal_updates?: boolean | null
           email_notifications?: boolean | null
           id?: string
           in_app_notifications?: boolean | null
           lead_assigned?: boolean | null
+          leads_notifications?: boolean | null
           meeting_reminders?: boolean | null
+          notification_frequency?: string | null
           push_notifications?: boolean | null
           task_reminders?: boolean | null
           updated_at?: string
@@ -1706,6 +1834,51 @@ export type Database = {
         }
         Relationships: []
       }
+      system_updates: {
+        Row: {
+          created_at: string
+          device_name: string
+          id: string
+          installed_on: string | null
+          last_checked: string | null
+          os_version: string | null
+          patch_id: string | null
+          remarks: string | null
+          status: string | null
+          update_type: string | null
+          update_version: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_name: string
+          id?: string
+          installed_on?: string | null
+          last_checked?: string | null
+          os_version?: string | null
+          patch_id?: string | null
+          remarks?: string | null
+          status?: string | null
+          update_type?: string | null
+          update_version?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_name?: string
+          id?: string
+          installed_on?: string | null
+          last_checked?: string | null
+          os_version?: string | null
+          patch_id?: string | null
+          remarks?: string | null
+          status?: string | null
+          update_type?: string | null
+          update_version?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       table_column_preferences: {
         Row: {
           column_config: Json
@@ -1895,12 +2068,49 @@ export type Database = {
           },
         ]
       }
+      user_access_cache: {
+        Row: {
+          cache_date: string
+          computed_at: string
+          id: string
+          permissions: Json
+          permissions_updated_at: string | null
+          profile: Json | null
+          role: string
+          role_assigned_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cache_date?: string
+          computed_at?: string
+          id?: string
+          permissions?: Json
+          permissions_updated_at?: string | null
+          profile?: Json | null
+          role?: string
+          role_assigned_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cache_date?: string
+          computed_at?: string
+          id?: string
+          permissions?: Json
+          permissions_updated_at?: string | null
+          profile?: Json | null
+          role?: string
+          role_assigned_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_preferences: {
         Row: {
           created_at: string | null
           currency: string | null
           date_format: string | null
           default_module: string | null
+          email_signature: string | null
           id: string
           language: string | null
           theme: string | null
@@ -1914,6 +2124,7 @@ export type Database = {
           currency?: string | null
           date_format?: string | null
           default_module?: string | null
+          email_signature?: string | null
           id?: string
           language?: string | null
           theme?: string | null
@@ -1927,6 +2138,7 @@ export type Database = {
           currency?: string | null
           date_format?: string | null
           default_module?: string | null
+          email_signature?: string | null
           id?: string
           language?: string | null
           theme?: string | null
@@ -2039,6 +2251,15 @@ export type Database = {
       calculate_contact_score: {
         Args: { p_contact_id: string }
         Returns: number
+      }
+      get_my_access_snapshot: {
+        Args: never
+        Returns: {
+          computed_at: string
+          permissions: Json
+          profile: Json
+          role: string
+        }[]
       }
       get_user_role: { Args: { p_user_id: string }; Returns: string }
       is_current_user_admin: { Args: never; Returns: boolean }

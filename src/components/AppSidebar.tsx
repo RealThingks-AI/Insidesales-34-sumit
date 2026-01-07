@@ -16,8 +16,8 @@ import {
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemePreferences } from "@/hooks/useThemePreferences";
-import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useMemo } from "react";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import {
   Tooltip,
   TooltipContent,
@@ -53,71 +53,20 @@ interface AppSidebarProps {
   onToggle?: (open: boolean) => void;
 }
 
-interface PagePermission {
-  route: string;
-  admin_access: boolean;
-  manager_access: boolean;
-  user_access: boolean;
-}
-
 export function AppSidebar({ isFixed = false, isOpen, onToggle }: AppSidebarProps) {
   const [isPinned, setIsPinned] = useState(false);
   const [showSignOutDialog, setShowSignOutDialog] = useState(false);
-  const [permissions, setPermissions] = useState<PagePermission[]>([]);
-  const [userRole, setUserRole] = useState<string>('user');
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { theme, setTheme } = useThemePreferences();
+  const { hasPageAccess } = usePermissions();
   const currentPath = location.pathname;
 
-  // Fetch user role and permissions
-  useEffect(() => {
-    const fetchRoleAndPermissions = async () => {
-      if (!user) return;
-
-      try {
-        // Get user role from user_roles table
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single();
-
-        const role = roleData?.role || user.user_metadata?.role || 'user';
-        setUserRole(role);
-
-        // Get all page permissions
-        const { data: permData } = await supabase
-          .from('page_permissions')
-          .select('route, admin_access, manager_access, user_access');
-
-        setPermissions(permData || []);
-      } catch (error) {
-        console.error('Error fetching role/permissions:', error);
-      }
-    };
-
-    fetchRoleAndPermissions();
-  }, [user]);
-
-  // Filter menu items based on user permissions
+  // Filter menu items based on cached permissions (synchronous)
   const menuItems = useMemo(() => {
-    return allMenuItems.filter(item => {
-      const permission = permissions.find(p => p.route === item.route);
-      if (!permission) return true; // Allow if no permission record exists
-
-      switch (userRole) {
-        case 'admin':
-          return permission.admin_access;
-        case 'manager':
-          return permission.manager_access;
-        case 'user':
-        default:
-          return permission.user_access;
-      }
-    });
-  }, [permissions, userRole]);
+    return allMenuItems.filter(item => hasPageAccess(item.route));
+  }, [hasPageAccess]);
 
   // Use external state if provided (for fixed mode), otherwise use internal state
   const sidebarOpen = isFixed ? (isOpen ?? false) : isPinned;
@@ -177,9 +126,9 @@ export function AppSidebar({ isFixed = false, isOpen, onToggle }: AppSidebarProp
         isFixed ? 'relative' : ''
       }`}
       style={{ 
-        width: sidebarOpen ? '200px' : '64px',
-        minWidth: sidebarOpen ? '200px' : '64px',
-        maxWidth: sidebarOpen ? '200px' : '64px'
+        width: sidebarOpen ? '12.5rem' : '4rem',
+        minWidth: sidebarOpen ? '12.5rem' : '4rem',
+        maxWidth: sidebarOpen ? '12.5rem' : '4rem'
       }}
     >
       {/* Header */}
@@ -298,38 +247,6 @@ export function AppSidebar({ isFixed = false, isOpen, onToggle }: AppSidebarProp
           </Tooltip>
         </div>
 
-        {/* Theme Toggle */}
-        <div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={handleThemeToggle}
-                className="flex items-center h-10 w-full rounded-lg transition-colors text-sidebar-foreground/70 hover:text-sidebar-primary hover:bg-sidebar-accent/50 font-medium"
-              >
-                <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
-                  {(() => {
-                    const ThemeIcon = getThemeIcon();
-                    return <ThemeIcon className="w-5 h-5" />;
-                  })()}
-                </div>
-                <div 
-                  className={`transition-all duration-300 overflow-hidden whitespace-nowrap ${
-                    sidebarOpen ? 'opacity-100 w-auto ml-0' : 'opacity-0 w-0 ml-0'
-                  }`}
-                  style={{ 
-                    fontFamily: 'Inter, system-ui, sans-serif',
-                    fontSize: '14px'
-                  }}
-                >
-                  Theme
-                </div>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side={sidebarOpen ? "bottom" : "right"}>
-              <p>{getThemeTooltipText()}</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
 
         {/* Pin Toggle Button */}
         <div>

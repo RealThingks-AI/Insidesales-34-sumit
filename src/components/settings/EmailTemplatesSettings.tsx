@@ -4,17 +4,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Edit, Trash2, Info } from "lucide-react";
+import { Plus, Edit, Trash2, Info, Eye } from "lucide-react";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TablePagination } from "@/components/shared/TablePagination";
+import TemplatePreviewModal from "./email/TemplatePreviewModal";
+import { RichTextEditor } from "@/components/shared/RichTextEditor";
 
 interface EmailTemplate {
   id: string;
@@ -39,6 +40,8 @@ const EmailTemplatesSettings = () => {
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     subject: "",
@@ -251,26 +254,52 @@ const EmailTemplatesSettings = () => {
                     <TableCell>{template.subject}</TableCell>
                     <TableCell>{format(new Date(template.created_at), 'dd/MM/yyyy')}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenModal(template)}
-                          aria-label={`Edit ${template.name} template`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setTemplateToDelete(template.id);
-                            setShowDeleteDialog(true);
-                          }}
-                          aria-label={`Delete ${template.name} template`}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      <div className="flex items-center gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setPreviewTemplate(template);
+                                setShowPreviewModal(true);
+                              }}
+                              aria-label={`Preview ${template.name} template`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Preview</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenModal(template)}
+                              aria-label={`Edit ${template.name} template`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Edit</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setTemplateToDelete(template.id);
+                                setShowDeleteDialog(true);
+                              }}
+                              aria-label={`Delete ${template.name} template`}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete</TooltipContent>
+                        </Tooltip>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -308,6 +337,7 @@ const EmailTemplatesSettings = () => {
                 value={formData.name}
                 onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="e.g., Welcome Email, Follow-up"
+                className="max-w-sm"
                 required
               />
             </div>
@@ -325,13 +355,10 @@ const EmailTemplatesSettings = () => {
 
             <div className="space-y-2">
               <Label htmlFor="body">Email Body *</Label>
-              <Textarea
-                id="body"
+              <RichTextEditor
                 value={formData.body}
-                onChange={(e) => setFormData(prev => ({ ...prev, body: e.target.value }))}
+                onChange={(value) => setFormData(prev => ({ ...prev, body: value }))}
                 placeholder="Write your email content here. Use variables like {{contact_name}} for personalization."
-                rows={8}
-                required
               />
             </div>
 
@@ -371,6 +398,13 @@ const EmailTemplatesSettings = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Template Preview Modal */}
+      <TemplatePreviewModal
+        open={showPreviewModal}
+        onOpenChange={setShowPreviewModal}
+        template={previewTemplate}
+      />
     </div>
   );
 };

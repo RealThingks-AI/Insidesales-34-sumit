@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTasks } from '@/hooks/useTasks';
 import { useAuth } from '@/hooks/useAuth';
 import { useTasksImportExport } from '@/hooks/useTasksImportExport';
-import { Task, TaskStatus } from '@/types/task';
+import { Task, TaskStatus, CreateTaskData, TaskModuleType, TaskModalContext } from '@/types/task';
 import { TaskModal } from '@/components/tasks/TaskModal';
 import { TaskListView } from '@/components/tasks/TaskListView';
 import { TaskKanbanView } from '@/components/tasks/TaskKanbanView';
@@ -18,7 +18,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 const Tasks = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialStatus = searchParams.get('status') || 'all';
   const { user } = useAuth();
   const { tasks, loading, fetchTasks, createTask, updateTask, deleteTask } = useTasks();
@@ -34,6 +35,12 @@ const Tasks = () => {
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  
+  // Context for prefilling task modal when coming from another module
+  const [prefillContext, setPrefillContext] = useState<TaskModalContext | undefined>();
+  const [returnPath, setReturnPath] = useState<string | null>(null);
+  const [returnViewId, setReturnViewId] = useState<string | null>(null);
+  const [returnTab, setReturnTab] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,22 +64,99 @@ const Tasks = () => {
     }
   }, [searchParams]);
 
-  // Handle viewId from URL (from global search)
+  // Handle create param from URL (from AccountDetailModal redirect)
+  useEffect(() => {
+    const createParam = searchParams.get('create');
+    const moduleParam = searchParams.get('module');
+    const recordIdParam = searchParams.get('recordId');
+    const recordNameParam = searchParams.get('recordName');
+    const returnParam = searchParams.get('return');
+    const returnViewIdParam = searchParams.get('returnViewId');
+    const returnTabParam = searchParams.get('returnTab');
+    
+    if (createParam === '1' && moduleParam && recordIdParam) {
+      // Validate module is a valid TaskModuleType
+      const validModules: TaskModuleType[] = ['accounts', 'contacts', 'leads', 'meetings', 'deals'];
+      const module = validModules.includes(moduleParam as TaskModuleType) 
+        ? (moduleParam as TaskModuleType) 
+        : undefined;
+      
+      if (module) {
+        // Set context for prefilling
+        setPrefillContext({
+          module,
+          recordId: recordIdParam,
+          recordName: recordNameParam || undefined,
+          locked: true
+        });
+        setReturnPath(returnParam);
+        setReturnViewId(returnViewIdParam);
+        setReturnTab(returnTabParam);
+        
+        // Open create modal
+        setEditingTask(null);
+        setShowModal(true);
+        
+        // Clear create params from URL but keep return params in state
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('create');
+        newParams.delete('module');
+        newParams.delete('recordId');
+        newParams.delete('recordName');
+        newParams.delete('return');
+        newParams.delete('returnViewId');
+        newParams.delete('returnTab');
+        const newUrl = newParams.toString() ? `/tasks?${newParams.toString()}` : '/tasks';
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [searchParams]);
+
+  // Handle viewId from URL (from global search or edit redirect)
   useEffect(() => {
     const viewId = searchParams.get('viewId');
+    const returnParam = searchParams.get('return');
+    const returnViewIdParam = searchParams.get('returnViewId');
+    const returnTabParam = searchParams.get('returnTab');
+    
     if (viewId && tasks.length > 0) {
       const taskToView = tasks.find(t => t.id === viewId);
       if (taskToView) {
+        // Store return params if present
+        if (returnParam) {
+          setReturnPath(returnParam);
+          setReturnViewId(returnViewIdParam);
+          setReturnTab(returnTabParam);
+        }
+        
         setEditingTask(taskToView);
         setShowModal(true);
-        // Clear the viewId from URL after opening - use window.history to avoid re-render loop
+        // Clear the viewId from URL after opening
         const newParams = new URLSearchParams(searchParams);
         newParams.delete('viewId');
+        newParams.delete('return');
+        newParams.delete('returnViewId');
+        newParams.delete('returnTab');
         const newUrl = newParams.toString() ? `/tasks?${newParams.toString()}` : '/tasks';
         window.history.replaceState({}, '', newUrl);
       }
     }
   }, [searchParams, tasks]);
+
+  // Navigate back to the return path (e.g., AccountDetailModal)
+  const navigateBack = () => {
+    if (returnPath && returnViewId) {
+      const params = new URLSearchParams();
+      params.set('viewId', returnViewId);
+      if (returnTab) params.set('tab', returnTab);
+      navigate(`${returnPath}?${params.toString()}`);
+    }
+    // Clear return state
+    setReturnPath(null);
+    setReturnViewId(null);
+    setReturnTab(null);
+    setPrefillContext(undefined);
+  };
 
   const handleEdit = (task: Task) => {
     setEditingTask(task);
@@ -103,6 +187,31 @@ const Tasks = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingTask(null);
+    
+    // If we came from another module, navigate back
+    if (returnPath && returnViewId) {
+      navigateBack();
+    } else {
+      setPrefillContext(undefined);
+    }
+  };
+
+  // Handle task submit with return navigation
+  const handleTaskSubmit = async (data: CreateTaskData) => {
+    const result = await createTask(data);
+    if (result && returnPath && returnViewId) {
+      navigateBack();
+    }
+    return result;
+  };
+
+  // Handle task update with return navigation  
+  const handleTaskUpdate = async (taskId: string, data: Partial<Task>, original?: Task) => {
+    const result = await updateTask(taskId, data, original);
+    if (result && returnPath && returnViewId) {
+      navigateBack();
+    }
+    return result;
   };
 
   const handleBulkDelete = async () => {
@@ -142,13 +251,8 @@ const Tasks = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  // Show skeleton in content area instead of blocking spinner
+  const showSkeleton = loading && tasks.length === 0;
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -188,7 +292,7 @@ const Tasks = () => {
               {/* Actions Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-1">
+                  <Button variant="outline" size="sm">
                     Actions
                   </Button>
                 </DropdownMenuTrigger>
@@ -216,8 +320,8 @@ const Tasks = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button size="sm" onClick={() => setShowModal(true)}>
-                <Plus className="h-4 w-4 mr-1" />
+              <Button size="sm" className="gap-1.5" onClick={() => setShowModal(true)}>
+                <Plus className="w-4 h-4" />
                 Add Task
               </Button>
             </div>
@@ -227,35 +331,53 @@ const Tasks = () => {
 
       {/* Main Content */}
       <div className="flex-1 min-h-0 overflow-auto px-4 pt-2 pb-4">
-        {viewMode === 'list' && (
-          <TaskListView 
-            tasks={tasks} 
-            onEdit={handleEdit} 
-            onDelete={handleDelete} 
-            onStatusChange={handleStatusChange} 
-            onToggleComplete={handleToggleComplete} 
-            initialStatusFilter={initialStatusFilter} 
-            initialOwnerFilter={initialOwnerFilter}
-          />
-        )}
-        {viewMode === 'kanban' && (
-          <TaskKanbanView 
-            tasks={tasks} 
-            onEdit={handleEdit} 
-            onDelete={handleDelete} 
-            onStatusChange={handleStatusChange}
-          />
-        )}
-        {viewMode === 'calendar' && (
-          <TaskCalendarView 
-            tasks={tasks} 
-            onEdit={handleEdit}
-          />
+        {showSkeleton ? (
+          <div className="space-y-4">
+            <div className="h-10 bg-muted animate-pulse rounded" />
+            <div className="h-64 bg-muted animate-pulse rounded" />
+          </div>
+        ) : (
+          <>
+            {viewMode === 'list' && (
+              <TaskListView 
+                tasks={tasks} 
+                onEdit={handleEdit} 
+                onDelete={handleDelete} 
+                onStatusChange={handleStatusChange} 
+                onToggleComplete={handleToggleComplete} 
+                initialStatusFilter={initialStatusFilter} 
+                initialOwnerFilter={initialOwnerFilter}
+                selectedTasks={selectedTasks}
+                onSelectionChange={setSelectedTasks}
+              />
+            )}
+            {viewMode === 'kanban' && (
+              <TaskKanbanView 
+                tasks={tasks} 
+                onEdit={handleEdit} 
+                onDelete={handleDelete} 
+                onStatusChange={handleStatusChange}
+              />
+            )}
+            {viewMode === 'calendar' && (
+              <TaskCalendarView 
+                tasks={tasks} 
+                onEdit={handleEdit}
+              />
+            )}
+          </>
         )}
       </div>
 
       {/* Task Modal */}
-      <TaskModal open={showModal} onOpenChange={handleCloseModal} task={editingTask} onSubmit={createTask} onUpdate={updateTask} />
+      <TaskModal 
+        open={showModal} 
+        onOpenChange={handleCloseModal} 
+        task={editingTask} 
+        onSubmit={handleTaskSubmit} 
+        onUpdate={handleTaskUpdate}
+        context={prefillContext}
+      />
 
       {/* Column Customizer */}
       <TaskColumnCustomizer open={showColumnCustomizer} onOpenChange={setShowColumnCustomizer} />

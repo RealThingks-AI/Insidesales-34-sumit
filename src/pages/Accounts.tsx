@@ -77,16 +77,18 @@ const Accounts = () => {
             <div className="flex items-center gap-3">
               {selectedAccounts.length > 0 && (
                 <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon" onClick={handleBulkDeleteClick}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Delete Selected ({selectedAccounts.length})</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <div className="flex items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={handleBulkDeleteClick}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Delete Selected ({selectedAccounts.length})</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </TooltipProvider>
               )}
 
@@ -160,6 +162,7 @@ const Accounts = () => {
         isMultiple={true} 
         count={selectedAccounts.length} 
       />
+
     </div>
   );
 };

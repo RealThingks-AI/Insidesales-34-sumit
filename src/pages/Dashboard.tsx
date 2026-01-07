@@ -1,5 +1,6 @@
 import YearlyRevenueSummary from "@/components/YearlyRevenueSummary";
 import UserDashboard from "@/components/dashboard/UserDashboard";
+
 import { useUserRole } from "@/hooks/useUserRole";
 import { NotificationBell } from "@/components/NotificationBell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -107,8 +108,16 @@ const Dashboard = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await queryClient.invalidateQueries({ queryKey: ['user-'] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard-'] });
+      // Invalidate all dashboard-related queries using predicate function
+      await queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          if (typeof key !== 'string') return false;
+          return key.startsWith('user-') || 
+                 key.startsWith('dashboard-') || 
+                 key === 'all-user-profiles';
+        }
+      });
       toast.success("Dashboard refreshed");
     } catch {
       toast.error("Failed to refresh");

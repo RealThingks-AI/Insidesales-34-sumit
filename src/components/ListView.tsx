@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,16 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Deal, DealStage, DEAL_STAGES, STAGE_COLORS } from "@/types/deal";
-import { Search, Filter, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Briefcase } from "lucide-react";
+import { Search, Filter, X, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Briefcase, Edit3 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RowActionsDropdown, Edit, Trash2, CheckSquare } from "./RowActionsDropdown";
 import { format } from "date-fns";
 import { DealColumnCustomizer, DealColumnConfig, defaultDealColumns } from "./DealColumnCustomizer";
 import { BulkActionsBar } from "./BulkActionsBar";
 import { DealsAdvancedFilter, AdvancedFilterState } from "./DealsAdvancedFilter";
-import { TaskModal } from "./tasks/TaskModal";
-import { useTasks } from "@/hooks/useTasks";
-import { DealActionsDropdown } from "./DealActionsDropdown";
+import { InlineEditCell } from "./InlineEditCell";
+
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,7 @@ import { DeleteConfirmDialog } from "./shared/DeleteConfirmDialog";
 import { ClearFiltersButton } from "./shared/ClearFiltersButton";
 import { HighlightedText } from "./shared/HighlightedText";
 import { useUserDisplayNames } from "@/hooks/useUserDisplayNames";
+import { moveFieldToEnd } from "@/utils/columnOrderUtils";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -34,6 +35,7 @@ interface ListViewProps {
   onDeleteDeals: (dealIds: string[]) => void;
   onImportDeals: (deals: Partial<Deal>[]) => void;
   initialStageFilter?: string;
+  onSelectionChange?: (selectedIds: string[]) => void;
 }
 
 export const ListView = ({ 
@@ -42,7 +44,8 @@ export const ListView = ({
   onUpdateDeal, 
   onDeleteDeals, 
   onImportDeals,
-  initialStageFilter = 'all'
+  initialStageFilter = 'all',
+  onSelectionChange
 }: ListViewProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [leadOwnerFilter, setLeadOwnerFilter] = useState("all");
@@ -74,11 +77,13 @@ export const ListView = ({
       setFilters(prev => ({ ...prev, stages: [initialStageFilter as DealStage] }));
     }
   }, [initialStageFilter]);
+
+  // Notify parent of selection changes
+  useEffect(() => {
+    onSelectionChange?.(Array.from(selectedDeals));
+  }, [selectedDeals, onSelectionChange]);
   
-  // Task Modal state
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [taskDealId, setTaskDealId] = useState<string | null>(null);
-  const { createTask } = useTasks();
+  const navigate = useNavigate();
 
   // Delete confirmation state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -87,32 +92,37 @@ export const ListView = ({
   // Column customizer state
   const [columnCustomizerOpen, setColumnCustomizerOpen] = useState(false);
 
-  // Fetch all profiles for lead owner dropdown
+  // Fetch all profiles for lead owner dropdown - use shared cache
   const { data: allProfiles = [] } = useQuery({
     queryKey: ['all-profiles'],
     queryFn: async () => {
       const { data } = await supabase.from('profiles').select('id, full_name');
       return data || [];
     },
+    staleTime: 10 * 60 * 1000, // 10 minutes - profiles rarely change
+    gcTime: 30 * 60 * 1000,
   });
 
-  const [columns, setColumns] = useState<DealColumnConfig[]>([
-    { field: 'project_name', label: 'Project', visible: true, order: 0 },
-    { field: 'customer_name', label: 'Customer', visible: true, order: 1 },
-    { field: 'lead_name', label: 'Lead Name', visible: true, order: 2 },
-    { field: 'stage', label: 'Stage', visible: true, order: 3 },
-    { field: 'priority', label: 'Priority', visible: true, order: 4 },
-    { field: 'total_contract_value', label: 'Value', visible: true, order: 5 },
-    { field: 'probability', label: 'Probability', visible: true, order: 6 },
-    { field: 'expected_closing_date', label: 'Expected Close', visible: true, order: 7 },
-    { field: 'region', label: 'Region', visible: false, order: 8 },
-    { field: 'project_duration', label: 'Duration', visible: false, order: 9 },
-    { field: 'start_date', label: 'Start Date', visible: false, order: 10 },
-    { field: 'end_date', label: 'End Date', visible: false, order: 11 },
-    { field: 'proposal_due_date', label: 'Proposal Due', visible: false, order: 12 },
-    { field: 'total_revenue', label: 'Total Revenue', visible: false, order: 13 },
-    { field: 'lead_owner', label: 'Lead Owner', visible: true, order: 14 },
-  ]);
+  // Use column preferences hook for database persistence
+  const { 
+    columns: savedColumns, 
+    saveColumns, 
+    isSaving: isSavingColumns,
+    isLoading: columnsLoading 
+  } = useColumnPreferences({
+    moduleName: 'deals',
+    defaultColumns: defaultDealColumns,
+  });
+
+  // Local state for optimistic updates
+  const [localColumns, setLocalColumns] = useState<DealColumnConfig[]>(savedColumns);
+
+  // Sync local columns when saved columns load from DB
+  useEffect(() => {
+    if (savedColumns) {
+      setLocalColumns(savedColumns);
+    }
+  }, [savedColumns]);
 
   // Column width state
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
@@ -183,9 +193,12 @@ export const ListView = ({
     return name.split(' ').slice(0, 2).map(word => word.charAt(0).toUpperCase()).join('');
   };
 
-  // Generate consistent color from project name
+  // Generate consistent vibrant color from project name
   const getAvatarColor = (name: string) => {
-    const colors = ['bg-slate-500', 'bg-slate-600', 'bg-zinc-500', 'bg-gray-500', 'bg-stone-500', 'bg-neutral-500', 'bg-slate-700', 'bg-zinc-600'];
+    const colors = [
+      'bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 
+      'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-teal-600'
+    ];
     const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
     return colors[index];
   };
@@ -292,6 +305,43 @@ export const ListView = ({
   };
 
   const handleInlineEdit = async (dealId: string, field: string, value: any) => {
+    // Validation
+    if (field === 'probability') {
+      const numValue = Number(value);
+      if (isNaN(numValue) || numValue < 0 || numValue > 100) {
+        toast({
+          title: "Validation error",
+          description: "Probability must be between 0 and 100",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    if (field === 'priority') {
+      const numValue = Number(value);
+      if (isNaN(numValue) || numValue < 1 || numValue > 5) {
+        toast({
+          title: "Validation error",
+          description: "Priority must be between 1 and 5",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    if (['total_contract_value', 'total_revenue'].includes(field)) {
+      const numValue = Number(value);
+      if (isNaN(numValue) || numValue < 0) {
+        toast({
+          title: "Validation error",
+          description: "Amount must be a positive number",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     try {
       await onUpdateDeal(dealId, { [field]: value });
       toast({
@@ -311,19 +361,40 @@ export const ListView = ({
     if (field === 'stage') return 'stage';
     if (field === 'priority') return 'priority';
     if (field === 'lead_owner') return 'userSelect';
-    if (['total_contract_value', 'total_revenue'].includes(field)) return 'currency';
-    if (['expected_closing_date', 'start_date', 'end_date', 'proposal_due_date'].includes(field)) return 'date';
+    if (['total_contract_value', 'total_revenue', 'quarterly_revenue_q1', 'quarterly_revenue_q2', 'quarterly_revenue_q3', 'quarterly_revenue_q4'].includes(field)) return 'currency';
+    if (['expected_closing_date', 'start_date', 'end_date', 'proposal_due_date', 'rfq_received_date', 'signed_contract_date', 'implementation_start_date'].includes(field)) return 'date';
     if (['probability', 'project_duration'].includes(field)) return 'number';
+    if (['handoff_status', 'rfq_status', 'is_recurring', 'relationship_strength', 'region', 'decision_maker_level'].includes(field)) return 'select';
     return 'text';
   };
 
   const getFieldOptions = (field: string): string[] => {
+    if (field === 'handoff_status') {
+      return ['Not Started', 'In Progress', 'Complete'];
+    }
+    if (field === 'rfq_status') {
+      return ['Drafted', 'Submitted', 'Rejected', 'Accepted'];
+    }
+    if (field === 'is_recurring') {
+      return ['Yes', 'No', 'Unclear'];
+    }
+    if (field === 'relationship_strength') {
+      return ['Low', 'Medium', 'High'];
+    }
+    if (field === 'decision_maker_level') {
+      return ['Executive', 'Director', 'Manager', 'Individual Contributor'];
+    }
+    if (field === 'region') {
+      const regions = [...new Set(deals.map(d => d.region).filter(Boolean))] as string[];
+      return regions.length > 0 ? regions : ['North', 'South', 'East', 'West', 'Central'];
+    }
     return [];
   };
 
-  const visibleColumns = columns
-    .filter(col => col.visible)
-    .sort((a, b) => a.order - b.order);
+  const visibleColumns = moveFieldToEnd(
+    localColumns.filter((col) => col.visible).sort((a, b) => a.order - b.order),
+    "lead_owner",
+  );
 
   // Generate available options for multi-select filters
   const availableOptions = useMemo(() => {
@@ -462,12 +533,26 @@ export const ListView = ({
   const selectedDealObjects = deals.filter(deal => selectedDeals.has(deal.id));
 
   const handleCreateTask = (deal: Deal) => {
-    setTaskDealId(deal.id);
-    setTaskModalOpen(true);
+    const params = new URLSearchParams({
+      create: '1',
+      module: 'deals',
+      recordId: deal.id,
+      recordName: encodeURIComponent(deal.project_name || deal.deal_name || 'Deal'),
+      return: '/deals',
+      returnViewId: deal.id,
+    });
+    navigate(`/tasks?${params.toString()}`);
   };
 
+  // Listen for column customizer open event from header
+  useEffect(() => {
+    const handleOpenColumns = () => setColumnCustomizerOpen(true);
+    window.addEventListener('open-deal-columns', handleOpenColumns);
+    return () => window.removeEventListener('open-deal-columns', handleOpenColumns);
+  }, []);
+
   return (
-    <div className="h-full flex flex-col bg-background space-y-3">
+    <div className="flex flex-col h-full space-y-3">
       {/* Header and Actions */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
@@ -507,15 +592,6 @@ export const ListView = ({
           />
 
           <ClearFiltersButton hasActiveFilters={hasActiveFilters} onClear={clearAllFilters} />
-
-          <DealActionsDropdown
-            deals={deals}
-            onImport={onImportDeals}
-            onRefresh={() => {}}
-            selectedDeals={selectedDealObjects}
-            onColumnCustomize={() => setColumnCustomizerOpen(true)}
-            showColumns={true}
-          />
         </div>
         
         {/* Page size selector */}
@@ -533,7 +609,7 @@ export const ListView = ({
       </div>
 
       <Card className="flex-1 min-h-0 flex flex-col">
-        <div className="relative overflow-auto flex-1">
+        <div className="relative overflow-auto flex-1 min-h-0">
         <Table ref={tableRef} className="w-full">
           <TableHeader>
             <TableRow className="sticky top-0 z-20 bg-muted border-b-2">
@@ -562,11 +638,8 @@ export const ListView = ({
                     }
                   }}
                 >
-                  <div className="flex items-center gap-2 pr-4 text-foreground font-bold">
+                  <div className="flex items-center justify-center gap-2 pr-4 text-foreground font-bold">
                     {column.label}
-                    {sortBy === column.field && (
-                      sortOrder === "asc" ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />
-                    )}
                   </div>
                   <div
                     className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary/40 bg-transparent"
@@ -599,7 +672,7 @@ export const ListView = ({
               paginatedDeals.map((deal) => (
                 <TableRow 
                   key={deal.id} 
-                  className={`hover:bg-muted/20 border-b group ${selectedDeals.has(deal.id) ? 'bg-muted/30' : ''}`}
+                  className={`hover:bg-muted/30 border-b group transition-colors ${selectedDeals.has(deal.id) ? 'bg-primary/5' : ''}`}
                   data-state={selectedDeals.has(deal.id) ? "selected" : undefined}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()} className="text-center px-4 py-3">
@@ -613,7 +686,7 @@ export const ListView = ({
                   {visibleColumns.map(column => (
                     <TableCell 
                       key={column.field} 
-                      className="text-left px-4 py-3 align-middle whitespace-nowrap overflow-hidden text-ellipsis"
+                      className="text-left px-2 py-1 align-middle whitespace-nowrap overflow-visible"
                       style={{ 
                         width: `${columnWidths[column.field] || 120}px`,
                         minWidth: `${columnWidths[column.field] || 120}px`,
@@ -621,59 +694,36 @@ export const ListView = ({
                       }}
                     >
                       {column.field === 'project_name' || column.field === 'deal_name' ? (
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-full ${getAvatarColor(deal[column.field as keyof Deal]?.toString() || '')} flex items-center justify-center text-white text-xs font-medium shrink-0`}>
-                            {getProjectInitials(deal[column.field as keyof Deal]?.toString() || '')}
-                          </div>
+                        <div className="group flex items-center gap-1">
                           <button 
                             onClick={() => onDealClick(deal)}
                             className="text-primary hover:underline font-medium text-left truncate"
+                            title={deal[column.field as keyof Deal]?.toString() || 'Click to view'}
                           >
                             <HighlightedText text={deal[column.field as keyof Deal]?.toString() || '-'} highlight={searchTerm} />
                           </button>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-0.5 hover:bg-muted rounded"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDealClick(deal);
+                            }}
+                            title="Edit"
+                          >
+                            <Edit3 className="w-3 h-3 text-muted-foreground" />
+                          </button>
                         </div>
-                      ) : column.field === 'customer_name' ? (
-                        <span className="truncate block">
-                          <HighlightedText text={deal.customer_name || '-'} highlight={searchTerm} />
-                        </span>
-                      ) : column.field === 'lead_name' ? (
-                        <span className="truncate block">
-                          <HighlightedText text={deal.lead_name || '-'} highlight={searchTerm} />
-                        </span>
-                      ) : column.field === 'stage' ? (
-                        deal.stage ? (
-                          <Badge variant="outline" className={`whitespace-nowrap ${getStageBadgeClasses(deal.stage)}`}>
-                            {deal.stage}
-                          </Badge>
-                        ) : <span className="text-muted-foreground">-</span>
-                      ) : column.field === 'priority' ? (
-                        <span className="truncate block">
-                          {deal.priority ? `${deal.priority} (${getPriorityLabel(deal.priority)})` : '-'}
-                        </span>
-                      ) : column.field === 'total_contract_value' || column.field === 'total_revenue' ? (
-                        <span className="font-medium">{formatCurrency(deal[column.field as keyof Deal] as number, deal.currency_type)}</span>
-                      ) : column.field === 'probability' ? (
-                        <span className={`font-medium ${
-                          (deal.probability || 0) >= 70 ? 'text-green-600 dark:text-green-400' : 
-                          (deal.probability || 0) >= 40 ? 'text-amber-600 dark:text-amber-400' : 
-                          'text-muted-foreground'
-                        }`}>
-                          {deal.probability != null ? `${deal.probability}%` : '-'}
-                        </span>
-                      ) : column.field === 'expected_closing_date' || column.field === 'start_date' || column.field === 'end_date' || column.field === 'proposal_due_date' ? (
-                        <span className="truncate block">{formatDate(deal[column.field as keyof Deal] as string)}</span>
-                      ) : column.field === 'lead_owner' ? (
-                        <span className="truncate block">
-                          {deal.lead_owner ? (displayNames[deal.lead_owner] || "Loading...") : '-'}
-                        </span>
-                      ) : column.field === 'region' ? (
-                        <span className="truncate block">{deal.region || '-'}</span>
-                      ) : column.field === 'project_duration' ? (
-                        <span className="truncate block">{deal.project_duration ? `${deal.project_duration} months` : '-'}</span>
                       ) : (
-                        <span title={deal[column.field as keyof Deal]?.toString() || '-'} className="truncate block">
-                          {deal[column.field as keyof Deal]?.toString() || '-'}
-                        </span>
+                        <InlineEditCell
+                          value={deal[column.field as keyof Deal]}
+                          field={column.field}
+                          dealId={deal.id}
+                          onSave={handleInlineEdit}
+                          type={getFieldType(column.field)}
+                          options={getFieldOptions(column.field)}
+                          userOptions={allProfiles}
+                          currencyType={deal.currency_type}
+                        />
                       )}
                     </TableCell>
                   ))}
@@ -711,21 +761,9 @@ export const ListView = ({
           </TableBody>
           </Table>
         </div>
-      </Card>
-
-      {/* Bulk Actions */}
-      {selectedDeals.size > 0 && (
-        <BulkActionsBar
-          selectedCount={selectedDeals.size}
-          onDelete={handleBulkDelete}
-          onExport={handleBulkExport}
-          onClearSelection={() => setSelectedDeals(new Set())}
-        />
-      )}
-
-      {/* Pagination */}
-      {totalPages > 0 && (
-        <div className="flex items-center justify-between">
+        
+        {/* Pagination */}
+        <div className="flex items-center justify-between p-4 border-t flex-shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">
               Showing {filteredAndSortedDeals.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredAndSortedDeals.length)} of {filteredAndSortedDeals.length} deals
@@ -736,7 +774,7 @@ export const ListView = ({
               variant="outline" 
               size="sm" 
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
-              disabled={currentPage === 1}
+              disabled={currentPage === 1 || totalPages === 0}
             >
               <ChevronLeft className="w-4 h-4" />
               Previous
@@ -755,20 +793,25 @@ export const ListView = ({
             </Button>
           </div>
         </div>
-      )}
+      </Card>
 
-      <TaskModal
-        open={taskModalOpen}
-        onOpenChange={setTaskModalOpen}
-        onSubmit={createTask}
-        context={taskDealId ? { module: 'deals', recordId: taskDealId, locked: true } : undefined}
-      />
+      {/* Bulk Actions */}
+      {selectedDeals.size > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedDeals.size}
+          onDelete={handleBulkDelete}
+          onExport={handleBulkExport}
+          onClearSelection={() => setSelectedDeals(new Set())}
+        />
+      )}
 
       <DealColumnCustomizer
         open={columnCustomizerOpen}
         onOpenChange={setColumnCustomizerOpen}
-        columns={columns}
-        onColumnsChange={setColumns}
+        columns={localColumns}
+        onColumnsChange={setLocalColumns}
+        onSave={saveColumns}
+        isSaving={isSavingColumns}
       />
 
       <DeleteConfirmDialog
