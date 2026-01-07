@@ -214,7 +214,7 @@ export const AccountActivityTimeline = ({ accountId }: AccountActivityTimelinePr
 
   return (
     <>
-      <ScrollArea className="h-[350px]">
+      <ScrollArea className="h-[450px] max-h-[60vh]">
         <div className="relative pl-6">
           {/* Timeline line */}
           <div className="absolute left-2 top-2 bottom-2 w-0.5 bg-border" />
