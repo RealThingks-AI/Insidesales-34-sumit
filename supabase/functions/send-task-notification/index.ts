@@ -6,6 +6,85 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Azure Graph API email functions
+async function getAccessToken(): Promise<string> {
+  const tenantId = Deno.env.get("AZURE_EMAIL_TENANT_ID");
+  const clientId = Deno.env.get("AZURE_EMAIL_CLIENT_ID");
+  const clientSecret = Deno.env.get("AZURE_EMAIL_CLIENT_SECRET");
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error("Azure email credentials not configured");
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const params = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "https://graph.microsoft.com/.default",
+    grant_type: "client_credentials",
+  });
+
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Azure token error:", errorText);
+    throw new Error(`Failed to get Azure access token: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function sendEmailViaGraph(
+  accessToken: string,
+  to: string,
+  toName: string,
+  subject: string,
+  body: string,
+  from: string
+): Promise<void> {
+  const graphUrl = `https://graph.microsoft.com/v1.0/users/${from}/sendMail`;
+
+  const emailPayload = {
+    message: {
+      subject,
+      body: {
+        contentType: "HTML",
+        content: body,
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: to,
+            name: toName || to,
+          },
+        },
+      ],
+    },
+    saveToSentItems: true,
+  };
+
+  const response = await fetch(graphUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(emailPayload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Graph API error:", errorText);
+    throw new Error(`Failed to send email via Graph API: ${response.status}`);
+  }
+}
+
 type NotificationType = "task_assigned" | "status_in_progress" | "status_completed" | "status_cancelled" | "status_open";
 
 interface TaskNotificationRequest {
@@ -278,8 +357,18 @@ const handler = async (req: Request): Promise<Response> => {
 
     const emailSubject = getEmailSubject(notificationType, taskTitle);
 
-    // Get sender email from environment or use a default
-    const senderEmail = Deno.env.get("AZURE_SENDER_EMAIL") || Deno.env.get("DEFAULT_SENDER_EMAIL");
+    // Get sender email from profiles or environment
+    let senderEmail = Deno.env.get("AZURE_SENDER_EMAIL");
+    
+    if (!senderEmail) {
+      const { data: adminProfile } = await supabase
+        .from("profiles")
+        .select('"Email ID"')
+        .limit(1)
+        .single();
+      
+      senderEmail = adminProfile?.["Email ID"];
+    }
     
     if (!senderEmail) {
       console.error("No sender email configured");
@@ -289,24 +378,16 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Call send-email function
-    const { error: emailError } = await supabase.functions.invoke("send-email", {
-      body: {
-        to: recipientEmail,
-        subject: emailSubject,
-        body: emailHtml,
-        toName: profile.full_name,
-        from: senderEmail,
-      },
-    });
-
-    if (emailError) {
-      console.error("Failed to send task notification email:", emailError);
-      return new Response(
-        JSON.stringify({ success: false, error: emailError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // Send email directly via Azure Graph API
+    const accessToken = await getAccessToken();
+    await sendEmailViaGraph(
+      accessToken,
+      recipientEmail,
+      profile.full_name || "",
+      emailSubject,
+      emailHtml,
+      senderEmail
+    );
 
     console.log(`Task notification email sent successfully to ${recipientEmail}`);
 
