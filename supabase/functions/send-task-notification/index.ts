@@ -342,7 +342,7 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    const appUrl = Deno.env.get("APP_URL") || "https://narvjcteixgjclvjvlbn.lovable.app";
+    const appUrl = "https://crm.realthingks.com";
     const emailHtml = generateEmailHtml(
       notificationType,
       taskTitle,
@@ -357,26 +357,9 @@ const handler = async (req: Request): Promise<Response> => {
 
     const emailSubject = getEmailSubject(notificationType, taskTitle);
 
-    // Get sender email from profiles or environment
-    let senderEmail = Deno.env.get("AZURE_SENDER_EMAIL");
-    
-    if (!senderEmail) {
-      const { data: adminProfile } = await supabase
-        .from("profiles")
-        .select('"Email ID"')
-        .limit(1)
-        .single();
-      
-      senderEmail = adminProfile?.["Email ID"];
-    }
-    
-    if (!senderEmail) {
-      console.error("No sender email configured");
-      return new Response(
-        JSON.stringify({ error: "Sender email not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    // For task notifications, use the recipient's own email as sender
+    // This makes the email appear as a self-notification
+    const senderEmail = recipientEmail;
 
     // Send email directly via Azure Graph API
     const accessToken = await getAccessToken();

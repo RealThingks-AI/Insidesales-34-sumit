@@ -353,8 +353,8 @@ const handler = async (req: Request): Promise<Response> => {
       console.error("Error fetching notification preferences:", prefsError);
     }
 
-    // Get app URL from request or environment
-    const appUrl = Deno.env.get("APP_URL") || "https://your-app.lovable.dev";
+    // Use production app URL
+    const appUrl = "https://crm.realthingks.com";
     
     // Send emails with timezone awareness and duplicate prevention
     const emailResults: { userId: string; success: boolean; error?: string; skipped?: string }[] = [];
@@ -436,25 +436,9 @@ const handler = async (req: Request): Promise<Response> => {
         const emailHtml = generateEmailHtml(userTasksData, appUrl);
         const taskCount = userTodayTasks.length + userOverdueTasks.length;
         
-        // Get sender email - fetch from profiles (first admin) or use environment variable
-        let senderEmail = Deno.env.get("AZURE_SENDER_EMAIL");
-        
-        if (!senderEmail) {
-          // Try to get admin user's email from profiles
-          const { data: adminProfile } = await supabase
-            .from("profiles")
-            .select('"Email ID"')
-            .limit(1)
-            .single();
-          
-          senderEmail = adminProfile?.["Email ID"];
-        }
-        
-        if (!senderEmail) {
-          console.error("No sender email found in environment or profiles");
-          emailResults.push({ userId, success: false, error: "No sender email configured" });
-          continue;
-        }
+        // For daily task reminders, use the recipient's own email as the sender
+        // This makes the email appear as a self-reminder
+        const senderEmail = email;
         
         // Send email directly via Azure Graph API
         const accessToken = await getAccessToken();
