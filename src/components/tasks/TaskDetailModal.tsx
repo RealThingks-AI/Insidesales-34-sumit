@@ -33,6 +33,7 @@ import {
   History,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatDateTimeStandard } from '@/utils/formatUtils';
 
 interface TaskDetailModalProps {
   open: boolean;
@@ -313,13 +314,13 @@ export const TaskDetailModal = ({
               {task.created_at && (
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  Created: {format(new Date(task.created_at), 'dd/MM/yyyy')}
+                  Created: {formatDateTimeStandard(task.created_at)}
                 </span>
               )}
               {task.updated_at && (
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  Updated: {format(new Date(task.updated_at), 'dd/MM/yyyy')}
+                  Updated: {formatDateTimeStandard(task.updated_at)}
                 </span>
               )}
             </div>

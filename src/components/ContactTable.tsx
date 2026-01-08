@@ -30,6 +30,7 @@ import { ClearFiltersButton } from "./shared/ClearFiltersButton";
 import { TableSkeleton } from "./shared/Skeletons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { moveFieldToEnd } from "@/utils/columnOrderUtils";
+import { formatDateTimeStandard } from "@/utils/formatUtils";
 
 // Export ref interface for parent component
 export interface ContactTableRef {
@@ -496,10 +497,11 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
   };
 
   // Generate consistent color from name
+  // Generate consistent vibrant color from name (matching Accounts pattern)
   const getAvatarColor = (name: string) => {
     const colors = [
-      'bg-slate-500', 'bg-slate-600', 'bg-zinc-500', 'bg-gray-500',
-      'bg-stone-500', 'bg-neutral-500', 'bg-slate-700', 'bg-zinc-600'
+      'bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-amber-600', 
+      'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-teal-600'
     ];
     const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
     return colors[index];
@@ -512,6 +514,10 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
     } else if (columnField === 'created_by') {
       if (!contact.created_by) return '-';
       return displayNames[contact.created_by] || "Loading...";
+    } else if (columnField === 'created_time' || columnField === 'modified_time') {
+      const dateValue = contact[columnField as keyof Contact];
+      if (!dateValue) return '-';
+      return formatDateTimeStandard(dateValue as string);
     }
     return contact[columnField as keyof Contact] || '-';
   };
@@ -757,7 +763,7 @@ export const ContactTable = forwardRef<ContactTableRef, ContactTableProps>(({
                           <span className="text-center w-full block">{contact.email_clicks ?? 0}</span>
                         ) : column.field === 'last_contacted_at' ? (
                           contact.last_contacted_at ? (
-                            <span className="text-sm">{new Date(contact.last_contacted_at).toLocaleDateString()}</span>
+                            <span className="text-sm">{formatDateTimeStandard(contact.last_contacted_at)}</span>
                           ) : (
                             <span className="text-center text-muted-foreground w-full block">-</span>
                           )

@@ -33,12 +33,16 @@ import {
   History
 } from "lucide-react";
 import { format } from "date-fns";
+import { formatDateTimeStandard } from "@/utils/formatUtils";
 import { useUserDisplayNames } from "@/hooks/useUserDisplayNames";
 import { getMeetingStatus } from "@/utils/meetingStatus";
 import { MeetingFollowUpsSection } from "./MeetingFollowUpsSection";
 import { RecordChangeHistory } from "@/components/shared/RecordChangeHistory";
 import { ContactDetailModal } from "@/components/contacts/ContactDetailModal";
 import { LeadDetailModal } from "@/components/leads/LeadDetailModal";
+import { AccountDetailModalById } from "@/components/accounts/AccountDetailModalById";
+import { MeetingActivityTimeline } from "./MeetingActivityTimeline";
+import { MeetingActivityLogModal } from "./MeetingActivityLogModal";
 
 interface Meeting {
   id: string;
@@ -152,12 +156,17 @@ export const MeetingDetailModal = ({
   const [activeTab, setActiveTab] = useState('overview');
   const [linkedContact, setLinkedContact] = useState<LinkedContact | null>(null);
   const [linkedLead, setLinkedLead] = useState<LinkedLead | null>(null);
+  const [linkedAccount, setLinkedAccount] = useState<{ id: string; company_name: string; industry?: string | null; status?: string | null } | null>(null);
+  const [linkedDeal, setLinkedDeal] = useState<{ id: string; deal_name: string; stage: string; total_contract_value?: number | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const [tasksRefreshToken, setTasksRefreshToken] = useState(0);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
 
   // Detail modal states
   const [showContactDetailModal, setShowContactDetailModal] = useState(false);
   const [showLeadDetailModal, setShowLeadDetailModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showActivityLogModal, setShowActivityLogModal] = useState(false);
 
   // Navigate to Tasks module for task creation
   const handleRequestCreateTask = () => {
@@ -223,11 +232,39 @@ export const MeetingDetailModal = ({
       } else {
         setLinkedLead(null);
       }
+
+      // Fetch linked account if exists
+      if (meeting.account_id) {
+        const { data: accountData } = await supabase
+          .from('accounts')
+          .select('id, company_name, industry, status')
+          .eq('id', meeting.account_id)
+          .single();
+        setLinkedAccount(accountData);
+      } else {
+        setLinkedAccount(null);
+      }
+
+      // Fetch linked deal if exists
+      if (meeting.deal_id) {
+        const { data: dealData } = await supabase
+          .from('deals')
+          .select('id, deal_name, stage, total_contract_value')
+          .eq('id', meeting.deal_id)
+          .single();
+        setLinkedDeal(dealData);
+      } else {
+        setLinkedDeal(null);
+      }
     } catch (error) {
       console.error('Error fetching linked data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleActivityLogged = () => {
+    setActivityRefreshKey(prev => prev + 1);
   };
 
   if (!meeting) return null;
@@ -405,7 +442,7 @@ export const MeetingDetailModal = ({
                 {meeting.created_at && (
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    Created: {format(new Date(meeting.created_at), 'dd/MM/yyyy')}
+                    Created: {formatDateTimeStandard(meeting.created_at)}
                   </span>
                 )}
               </div>
@@ -417,7 +454,7 @@ export const MeetingDetailModal = ({
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Linked Contact */}
                   <Card>
                     <CardHeader className="pb-3">
@@ -429,24 +466,20 @@ export const MeetingDetailModal = ({
                     <CardContent>
                       {linkedContact ? (
                         <div
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                          className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
                           onClick={() => setShowContactDetailModal(true)}
                         >
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                               <User className="h-5 w-5 text-primary" />
                             </div>
-                            <div>
-                              <p className="font-medium">{linkedContact.contact_name}</p>
-                              <p className="text-sm text-muted-foreground">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{linkedContact.contact_name}</p>
+                              <p className="text-sm text-muted-foreground truncate">
                                 {linkedContact.position || 'Contact'}
                               </p>
                             </div>
                           </div>
-                          <Button variant="ghost" size="sm" className="gap-2">
-                            <ExternalLink className="h-4 w-4" />
-                            View Details
-                          </Button>
                         </div>
                       ) : (
                         <div className="text-center py-6 text-muted-foreground">
@@ -468,24 +501,20 @@ export const MeetingDetailModal = ({
                     <CardContent>
                       {linkedLead ? (
                         <div
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                          className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
                           onClick={() => setShowLeadDetailModal(true)}
                         >
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                               <Users className="h-5 w-5 text-primary" />
                             </div>
-                            <div>
-                              <p className="font-medium">{linkedLead.lead_name}</p>
-                              <p className="text-sm text-muted-foreground">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{linkedLead.lead_name}</p>
+                              <p className="text-sm text-muted-foreground truncate">
                                 {linkedLead.company_name || 'Lead'}
                               </p>
                             </div>
                           </div>
-                          <Button variant="ghost" size="sm" className="gap-2">
-                            <ExternalLink className="h-4 w-4" />
-                            View Details
-                          </Button>
                         </div>
                       ) : (
                         <div className="text-center py-6 text-muted-foreground">
@@ -495,15 +524,73 @@ export const MeetingDetailModal = ({
                       )}
                     </CardContent>
                   </Card>
-                </div>
-              )}
 
-              {/* Empty state */}
-              {!loading && !linkedContact && !linkedLead && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No linked records</p>
-                  <p className="text-xs mt-1">This meeting is not linked to any contact or lead</p>
+                  {/* Linked Account */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        Account
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {linkedAccount ? (
+                        <div
+                          className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer"
+                          onClick={() => setShowAccountModal(true)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Building2 className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{linkedAccount.company_name}</p>
+                              <p className="text-sm text-muted-foreground truncate">
+                                {linkedAccount.industry || 'Account'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No linked account</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Linked Deal */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Briefcase className="h-4 w-4" />
+                        Deal
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {linkedDeal ? (
+                        <div className="p-3 rounded-lg bg-muted/50">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Briefcase className="h-5 w-5 text-primary" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium truncate">{linkedDeal.deal_name}</p>
+                              <p className="text-sm text-muted-foreground truncate">
+                                {linkedDeal.stage}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <Briefcase className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No linked deal</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </TabsContent>
@@ -519,30 +606,41 @@ export const MeetingDetailModal = ({
               />
             </TabsContent>
 
-            <TabsContent value="activity" className="mt-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Meeting Notes & Activity</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {meeting.notes ? (
+            <TabsContent value="activity" className="mt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Activity Timeline</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowActivityLogModal(true)}
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Log Activity
+                </Button>
+              </div>
+
+              {/* Meeting Notes Card */}
+              {meeting.notes && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Meeting Notes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <p className="text-sm whitespace-pre-wrap">{meeting.notes}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No notes recorded for this meeting</p>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Activity Timeline */}
+              <MeetingActivityTimeline meetingId={meeting.id} refreshKey={activityRefreshKey} />
             </TabsContent>
 
             <TabsContent value="history" className="mt-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Change History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <RecordChangeHistory entityType="meetings" entityId={meeting.id} maxHeight="300px" />
-                </CardContent>
-              </Card>
+              <RecordChangeHistory entityType="meetings" entityId={meeting.id} maxHeight="400px" />
             </TabsContent>
           </Tabs>
         </DialogContent>
@@ -566,6 +664,23 @@ export const MeetingDetailModal = ({
           onUpdate={onUpdate}
         />
       )}
+
+      {linkedAccount && (
+        <AccountDetailModalById
+          open={showAccountModal}
+          onOpenChange={setShowAccountModal}
+          accountId={linkedAccount.id}
+          onUpdate={onUpdate}
+        />
+      )}
+
+      {/* Activity Log Modal */}
+      <MeetingActivityLogModal
+        open={showActivityLogModal}
+        onOpenChange={setShowActivityLogModal}
+        meetingId={meeting.id}
+        onSuccess={handleActivityLogged}
+      />
     </>
   );
 };

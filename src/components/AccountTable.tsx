@@ -23,6 +23,7 @@ import { AccountDetailModal } from "./accounts/AccountDetailModal";
 import { HighlightedText } from "./shared/HighlightedText";
 import { getAccountStatusColor } from "@/utils/accountStatusUtils";
 import { moveFieldToEnd } from "@/utils/columnOrderUtils";
+import { formatDateTimeStandard } from "@/utils/formatUtils";
 import { ClearFiltersButton } from "./shared/ClearFiltersButton";
 import { TableSkeleton } from "./shared/Skeletons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -645,6 +646,12 @@ const AccountTable = forwardRef<AccountTableRef, AccountTableProps>(({
                           ) : column.field === 'email' ? (
                             account.email ? (
                               <HighlightedText text={account.email} highlight={searchTerm} />
+                            ) : (
+                              <span className="text-center text-muted-foreground w-full block">-</span>
+                            )
+                          ) : column.field === 'created_at' || column.field === 'updated_at' ? (
+                            account[column.field as keyof Account] ? (
+                              <span className="text-sm">{formatDateTimeStandard(account[column.field as keyof Account] as string)}</span>
                             ) : (
                               <span className="text-center text-muted-foreground w-full block">-</span>
                             )

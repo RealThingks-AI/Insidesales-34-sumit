@@ -17,6 +17,13 @@ import { Plus, Loader2, List, LayoutGrid, CalendarDays, Trash2, Columns, Downloa
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
+interface ColumnPreference {
+  visible_columns: string[];
+  column_order: string[];
+}
+
+const defaultVisibleColumns = ['checkbox', 'title', 'status', 'priority', 'due_date', 'assigned_to', 'linked_to', 'created_by', 'actions'];
+
 const Tasks = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -35,6 +42,8 @@ const Tasks = () => {
   const [showColumnCustomizer, setShowColumnCustomizer] = useState(false);
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(defaultVisibleColumns);
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
   
   // Context for prefilling task modal when coming from another module
   const [prefillContext, setPrefillContext] = useState<TaskModalContext | undefined>();
@@ -43,6 +52,41 @@ const Tasks = () => {
   const [returnTab, setReturnTab] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load column preferences on mount
+  useEffect(() => {
+    const loadColumnPreferences = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const { data } = await supabase
+          .from('table_column_preferences')
+          .select('column_config')
+          .eq('user_id', user.id)
+          .eq('module_name', 'tasks')
+          .maybeSingle();
+
+        if (data?.column_config) {
+          const config = data.column_config as unknown as ColumnPreference;
+          if (config.visible_columns && Array.isArray(config.visible_columns)) {
+            setVisibleColumns(config.visible_columns);
+          }
+          if (config.column_order && Array.isArray(config.column_order)) {
+            setColumnOrder(config.column_order);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading column preferences:', error);
+      }
+    };
+    
+    loadColumnPreferences();
+  }, [user?.id]);
+
+  const handleColumnsChange = (columns: string[], order?: string[]) => {
+    setVisibleColumns(columns);
+    if (order) setColumnOrder(order);
+  };
 
   // Get owner parameter from URL - "me" means filter by current user
   const ownerParam = searchParams.get('owner');
@@ -349,6 +393,8 @@ const Tasks = () => {
                 initialOwnerFilter={initialOwnerFilter}
                 selectedTasks={selectedTasks}
                 onSelectionChange={setSelectedTasks}
+                visibleColumns={visibleColumns}
+                columnOrder={columnOrder}
               />
             )}
             {viewMode === 'kanban' && (
@@ -380,7 +426,7 @@ const Tasks = () => {
       />
 
       {/* Column Customizer */}
-      <TaskColumnCustomizer open={showColumnCustomizer} onOpenChange={setShowColumnCustomizer} />
+      <TaskColumnCustomizer open={showColumnCustomizer} onOpenChange={setShowColumnCustomizer} onColumnsChange={handleColumnsChange} />
 
       {/* Single Delete Confirmation */}
       <AlertDialog open={!!deleteTaskId} onOpenChange={() => setDeleteTaskId(null)}>

@@ -5,6 +5,52 @@ import { toast } from '@/hooks/use-toast';
 import { Task, CreateTaskData, TaskStatus } from '@/types/task';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+// Helper to send task notification email
+const sendTaskNotificationEmail = async (
+  taskId: string,
+  notificationType: string,
+  recipientUserId: string,
+  taskTitle: string,
+  taskDescription?: string,
+  taskDueDate?: string,
+  taskPriority?: string,
+  updatedByName?: string,
+  assigneeName?: string
+) => {
+  try {
+    await supabase.functions.invoke('send-task-notification', {
+      body: {
+        taskId,
+        notificationType,
+        recipientUserId,
+        taskTitle,
+        taskDescription,
+        taskDueDate,
+        taskPriority,
+        updatedByName,
+        assigneeName,
+      },
+    });
+    console.log(`Task notification email sent: ${notificationType} to ${recipientUserId}`);
+  } catch (error) {
+    console.error('Failed to send task notification email:', error);
+  }
+};
+
+// Helper to get current user's display name
+const getCurrentUserName = async (userId: string): Promise<string> => {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .single();
+    return data?.full_name || 'Someone';
+  } catch {
+    return 'Someone';
+  }
+};
+
 export const useTasks = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -74,6 +120,19 @@ export const useTasks = () => {
           message: `You have been assigned a new task: ${taskData.title}`,
           notification_type: 'task_assigned',
         });
+
+        // Send email notification
+        const creatorName = await getCurrentUserName(user.id);
+        sendTaskNotificationEmail(
+          data.id,
+          'task_assigned',
+          taskData.assigned_to,
+          taskData.title,
+          taskData.description,
+          taskData.due_date,
+          taskData.priority,
+          creatorName
+        );
       }
 
       return data;
@@ -109,6 +168,9 @@ export const useTasks = () => {
 
       if (error) throw error;
 
+      // Get current user's name for notifications
+      const updaterName = await getCurrentUserName(user.id);
+
       // Create notifications for changes
       if (originalTask) {
         // Notify on reassignment
@@ -118,15 +180,46 @@ export const useTasks = () => {
             message: `You have been assigned a task: ${originalTask.title}`,
             notification_type: 'task_assigned',
           });
+
+          // Send email notification for assignment
+          sendTaskNotificationEmail(
+            taskId,
+            'task_assigned',
+            updates.assigned_to,
+            originalTask.title,
+            originalTask.description || undefined,
+            originalTask.due_date || undefined,
+            originalTask.priority,
+            updaterName
+          );
         }
 
-        // Notify on completion (notify creator)
-        if (updates.status === 'completed' && originalTask.created_by && originalTask.created_by !== user.id) {
+        // Notify on status change (notify creator if assignee made the change)
+        if (updates.status && updates.status !== originalTask.status && originalTask.created_by && originalTask.created_by !== user.id) {
+          const statusMessages: Record<string, string> = {
+            'in_progress': `Task in progress: ${originalTask.title}`,
+            'completed': `Task completed: ${originalTask.title}`,
+            'cancelled': `Task cancelled: ${originalTask.title}`,
+            'open': `Task reopened: ${originalTask.title}`,
+          };
+
           await supabase.from('notifications').insert({
             user_id: originalTask.created_by,
-            message: `Task completed: ${originalTask.title}`,
-            notification_type: 'task_completed',
+            message: statusMessages[updates.status] || `Task updated: ${originalTask.title}`,
+            notification_type: updates.status === 'completed' ? 'task_completed' : 'task_updated',
           });
+
+          // Send email notification for status change
+          sendTaskNotificationEmail(
+            taskId,
+            `status_${updates.status}` as any,
+            originalTask.created_by,
+            originalTask.title,
+            originalTask.description || undefined,
+            originalTask.due_date || undefined,
+            originalTask.priority,
+            updaterName
+          );
         }
 
         // Notify assigned user on due date change
