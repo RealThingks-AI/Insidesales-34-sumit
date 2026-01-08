@@ -6,6 +6,87 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Azure Graph API email functions (same as send-email)
+async function getAccessToken(): Promise<string> {
+  const tenantId = Deno.env.get("AZURE_EMAIL_TENANT_ID");
+  const clientId = Deno.env.get("AZURE_EMAIL_CLIENT_ID");
+  const clientSecret = Deno.env.get("AZURE_EMAIL_CLIENT_SECRET");
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error("Azure email credentials not configured");
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+  const params = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "https://graph.microsoft.com/.default",
+    grant_type: "client_credentials",
+  });
+
+  const response = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Azure token error:", errorText);
+    throw new Error(`Failed to get Azure access token: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.access_token;
+}
+
+async function sendEmailViaGraph(
+  accessToken: string,
+  to: string,
+  toName: string,
+  subject: string,
+  body: string,
+  from: string
+): Promise<void> {
+  const graphUrl = `https://graph.microsoft.com/v1.0/users/${from}/sendMail`;
+
+  const emailPayload = {
+    message: {
+      subject,
+      body: {
+        contentType: "HTML",
+        content: body,
+      },
+      toRecipients: [
+        {
+          emailAddress: {
+            address: to,
+            name: toName || to,
+          },
+        },
+      ],
+    },
+    saveToSentItems: true,
+  };
+
+  const response = await fetch(graphUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(emailPayload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Graph API error:", errorText);
+    throw new Error(`Failed to send email via Graph API: ${response.status}`);
+  }
+
+  console.log(`Email sent successfully to ${to}`);
+}
+
 interface Task {
   id: string;
   title: string;
@@ -355,49 +436,53 @@ const handler = async (req: Request): Promise<Response> => {
         const emailHtml = generateEmailHtml(userTasksData, appUrl);
         const taskCount = userTodayTasks.length + userOverdueTasks.length;
         
-        // Get sender email from environment
-        const senderEmail = Deno.env.get("AZURE_SENDER_EMAIL") || Deno.env.get("DEFAULT_SENDER_EMAIL");
+        // Get sender email - fetch from profiles (first admin) or use environment variable
+        let senderEmail = Deno.env.get("AZURE_SENDER_EMAIL");
         
         if (!senderEmail) {
-          console.error("No sender email configured (AZURE_SENDER_EMAIL or DEFAULT_SENDER_EMAIL)");
+          // Try to get admin user's email from profiles
+          const { data: adminProfile } = await supabase
+            .from("profiles")
+            .select('"Email ID"')
+            .limit(1)
+            .single();
+          
+          senderEmail = adminProfile?.["Email ID"];
+        }
+        
+        if (!senderEmail) {
+          console.error("No sender email found in environment or profiles");
           emailResults.push({ userId, success: false, error: "No sender email configured" });
           continue;
         }
         
-        // Call the existing send-email edge function
-        const { error: emailError } = await supabase.functions.invoke("send-email", {
-          body: {
-            to: email,
-            subject: `📋 You have ${taskCount} task${taskCount !== 1 ? "s" : ""} to complete today`,
-            body: emailHtml,
-            toName: userTasksData.fullName,
-            from: senderEmail,
-          },
-        });
+        // Send email directly via Azure Graph API
+        const accessToken = await getAccessToken();
+        await sendEmailViaGraph(
+          accessToken,
+          email,
+          userTasksData.fullName,
+          `📋 You have ${taskCount} task${taskCount !== 1 ? "s" : ""} to complete today`,
+          emailHtml,
+          senderEmail
+        );
+        
+        // Log the successful send to prevent duplicates
+        const { error: insertError } = await supabase
+          .from("task_reminder_logs")
+          .insert({
+            user_id: userId,
+            sent_date: userTodayDate,
+            tasks_count: userTodayTasks.length,
+            overdue_count: userOverdueTasks.length,
+            email_sent_to: email,
+          });
 
-        if (emailError) {
-          console.error(`Failed to send email to ${email}:`, emailError);
-          emailResults.push({ userId, success: false, error: emailError.message });
-        } else {
-          console.log(`Email sent successfully to ${email}`);
-          
-          // Log the successful send to prevent duplicates
-          const { error: insertError } = await supabase
-            .from("task_reminder_logs")
-            .insert({
-              user_id: userId,
-              sent_date: userTodayDate,
-              tasks_count: userTodayTasks.length,
-              overdue_count: userOverdueTasks.length,
-              email_sent_to: email,
-            });
-
-          if (insertError) {
-            console.error(`Failed to log reminder send for ${userId}:`, insertError);
-          }
-
-          emailResults.push({ userId, success: true });
+        if (insertError) {
+          console.error(`Failed to log reminder send for ${userId}:`, insertError);
         }
+
+        emailResults.push({ userId, success: true });
       } catch (err) {
         console.error(`Exception sending email to user ${userId}:`, err);
         emailResults.push({ userId, success: false, error: String(err) });
